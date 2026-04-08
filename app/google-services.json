@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "48418750430",
+    "project_id": "cyclapp-591bc",
+    "storage_bucket": "cyclapp-591bc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:48418750430:android:e922b7ad28aaaf2bdba74f",
+        "android_client_info": {
+          "package_name": "com.example.cyclapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-IJmP-rV50cCslkwgwjOCPQZ6DrnoRJo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
