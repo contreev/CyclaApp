@@ -1635,15 +1635,32 @@ fun MissionsScreen(
             return@LaunchedEffect
         }
 
-        db.collection("usuarios")
+        val misionesRef = db.collection("usuarios")
             .document(uid)
             .collection("misiones")
-            .get()
+
+        misionesRef.get()
             .addOnSuccessListener { snapshot ->
-                missions = snapshot.documents.mapNotNull { doc ->
-                    doc.toObject<MissionItem>()?.copy(id = doc.id)
+
+                if (snapshot.size() == 0) {
+                    // 🚀 CREAR MISIONES SI NO EXISTEN
+                    crearDatosInicialesUsuario(uid)
+
+                    // 🔄 VOLVER A CARGAR
+                    misionesRef.get().addOnSuccessListener { newSnapshot ->
+                        missions = newSnapshot.documents.mapNotNull { doc ->
+                            doc.toObject<MissionItem>()?.copy(id = doc.id)
+                        }
+                        loading = false
+                    }
+
+                } else {
+                    // ✅ YA EXISTEN
+                    missions = snapshot.documents.mapNotNull { doc ->
+                        doc.toObject<MissionItem>()?.copy(id = doc.id)
+                    }
+                    loading = false
                 }
-                loading = false
             }
             .addOnFailureListener {
                 loading = false
@@ -1747,6 +1764,8 @@ fun MissionsScreen(
                                 Button(
                                     onClick = {
                                         val uid = auth.currentUser?.uid ?: return@Button
+                                        val nuevo_progreso = mission.progreso + 1
+                                        val completada = nuevo_progreso >= mission.meta
 
                                         db.collection("usuarios")
                                             .document(uid)
@@ -1754,8 +1773,8 @@ fun MissionsScreen(
                                             .document(mission.id)
                                             .update(
                                                 mapOf(
-                                                    "progreso" to mission.meta,
-                                                    "completada" to true
+                                                    "progreso" to nuevo_progreso,
+                                                    "completada" to completada
                                                 )
                                             )
                                     },
