@@ -77,6 +77,12 @@ import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.ktx.toObject
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import coil.compose.AsyncImage
+import com.google.firebase.storage.ktx.storage
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -99,7 +105,8 @@ data class UserProfile(
     val correo: String = "",
     val fechaNacimiento: String = "",
     val puntos: Int = 0,
-    val nivel: String = "Inicial"
+    val nivel: String = "Inicial",
+    val fotoUrl: String = ""
 )
 
 data class MissionItem(
@@ -665,7 +672,8 @@ fun AuthScreen(
                                                     correo = registerEmail.trim(),
                                                     fechaNacimiento = "",
                                                     puntos = 0,
-                                                    nivel = "Inicial"
+                                                    nivel = "Inicial",
+                                                    fotoUrl = ""
                                                 )
 
                                                 db.collection("usuarios")
@@ -877,6 +885,72 @@ fun completarPasoMision(uid: String, mission: MissionItem) {
             desbloquearLogroSegunMision(uid, mission.id)
         }
     }
+}
+
+fun subirFotoPerfil(
+    uid: String,
+    imageUri: Uri,
+    onSuccess: () -> Unit = {},
+    onError: (String) -> Unit = {}
+) {
+    val storageRef = Firebase.storage.reference
+        .child("profile_photos/$uid.jpg")
+
+    val userRef = Firebase.firestore.collection("usuarios").document(uid)
+
+    storageRef.putFile(imageUri)
+        .continueWithTask { task ->
+            if (!task.isSuccessful) {
+                throw task.exception ?: Exception("Error subiendo foto")
+            }
+            storageRef.downloadUrl
+        }
+        .addOnSuccessListener { downloadUri ->
+            userRef.set(
+                mapOf("fotoUrl" to downloadUri.toString()),
+                SetOptions.merge()
+            )
+                .addOnSuccessListener { onSuccess() }
+                .addOnFailureListener { e ->
+                    onError(e.localizedMessage ?: "No se pudo guardar la URL de la foto.")
+                }
+        }
+        .addOnFailureListener { e ->
+            onError(e.localizedMessage ?: "No se pudo subir la foto.")
+        }
+}
+
+fun eliminarFotoPerfil(
+    uid: String,
+    onSuccess: () -> Unit = {},
+    onError: (String) -> Unit = {}
+) {
+    val storageRef = Firebase.storage.reference
+        .child("profile_photos/$uid.jpg")
+
+    val userRef = Firebase.firestore.collection("usuarios").document(uid)
+
+    storageRef.delete()
+        .addOnSuccessListener {
+            userRef.set(
+                mapOf("fotoUrl" to ""),
+                SetOptions.merge()
+            )
+                .addOnSuccessListener { onSuccess() }
+                .addOnFailureListener { e ->
+                    onError(e.localizedMessage ?: "No se pudo limpiar la foto del perfil.")
+                }
+        }
+        .addOnFailureListener {
+            userRef.set(
+                mapOf("fotoUrl" to ""),
+                SetOptions.merge()
+            )
+                .addOnSuccessListener { onSuccess() }
+                .addOnFailureListener { e ->
+                    onError(e.localizedMessage ?: "No se pudo limpiar la foto del perfil.")
+                }
+        }
 }
 
 @Composable
@@ -1363,6 +1437,30 @@ fun ProfileScreen(
     var apellidoEdit by remember { mutableStateOf("") }
     var fechaEdit by remember { mutableStateOf("") }
 
+    val context = LocalContext.current
+    var subiendoFoto by remember { mutableStateOf(false) }
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        val uid = user?.uid
+        if (uri != null && uid != null) {
+            subiendoFoto = true
+            subirFotoPerfil(
+                uid = uid,
+                imageUri = uri,
+                onSuccess = {
+                    subiendoFoto = false
+                    Toast.makeText(context, "Foto actualizada", Toast.LENGTH_SHORT).show()
+                },
+                onError = { error ->
+                    subiendoFoto = false
+                    Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
+                }
+            )
+        }
+    }
+
     DisposableEffect(user?.uid) {
         val uid = user?.uid
 
@@ -1495,12 +1593,28 @@ fun ProfileScreen(
             ) {
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Outlined.AccountCircle,
-                            contentDescription = "Perfil",
+                        Box(
                             modifier = Modifier.size(120.dp),
-                            tint = Color.Black
-                        )
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (profile.fotoUrl.isNotBlank()) {
+                                AsyncImage(
+                                    model = profile.fotoUrl,
+                                    contentDescription = "Foto de perfil",
+                                    modifier = Modifier
+                                        .size(120.dp)
+                                        .clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Outlined.AccountCircle,
+                                    contentDescription = "Perfil",
+                                    modifier = Modifier.size(120.dp),
+                                    tint = Color.Black
+                                )
+                            }
+                        }
 
                         Spacer(modifier = Modifier.width(16.dp))
 
@@ -1553,6 +1667,75 @@ fun ProfileScreen(
                                         )
                                 }
                             )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        photoPickerLauncher.launch(
+                                            PickVisualMediaRequest(
+                                                ActivityResultContracts.PickVisualMedia.ImageOnly
+                                            )
+                                        )
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFFB8CB6A)
+                                    ),
+                                    enabled = !subiendoFoto
+                                ) {
+                                    Text(
+                                        text = if (profile.fotoUrl.isBlank()) "Poner foto" else "Cambiar foto",
+                                        color = Color.White
+                                    )
+                                }
+
+                                Button(
+                                    onClick = {
+                                        val uid = user?.uid ?: return@Button
+                                        subiendoFoto = true
+                                        eliminarFotoPerfil(
+                                            uid = uid,
+                                            onSuccess = {
+                                                subiendoFoto = false
+                                                Toast.makeText(
+                                                    context,
+                                                    "Foto eliminada",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            },
+                                            onError = { error ->
+                                                subiendoFoto = false
+                                                Toast.makeText(
+                                                    context,
+                                                    error,
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                        )
+                                    },
+                                    enabled = profile.fotoUrl.isNotBlank() && !subiendoFoto,
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color.Gray
+                                    )
+                                ) {
+                                    Text(
+                                        text = "Eliminar",
+                                        color = Color.White
+                                    )
+                                }
+                            }
+
+                            if (subiendoFoto) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "Subiendo foto...",
+                                    fontSize = 12.sp,
+                                    color = Color.Gray
+                                )
+                            }
                         }
                     }
 
