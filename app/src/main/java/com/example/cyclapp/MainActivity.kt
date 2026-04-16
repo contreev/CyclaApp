@@ -1,5 +1,5 @@
 package com.example.cyclapp
-import androidx.compose.material3.LinearProgressIndicator
+
 import android.os.Bundle
 import android.util.Log
 import android.util.Patterns
@@ -41,13 +41,13 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -72,6 +72,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.cyclapp.ui.theme.CyclAppTheme
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.ktx.toObject
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
@@ -742,29 +744,29 @@ fun crearDatosInicialesUsuario(uid: String) {
     val misiones = listOf(
         MissionItem(
             id = "m1",
-            titulo = "Recicla 3 botellas",
-            descripcion = "Deposita 3 botellas plásticas correctamente.",
+            titulo = "Recicla 30 botellas",
+            descripcion = "Deposita 30 botellas plásticas correctamente.",
             progreso = 0,
-            meta = 3,
-            recompensa = 30,
+            meta = 30,
+            recompensa = 100,
             completada = false
         ),
         MissionItem(
             id = "m2",
-            titulo = "Primer registro",
-            descripcion = "Realiza tu primer registro de reciclaje.",
+            titulo = "Recicla 30 orgánicos",
+            descripcion = "Registra 30 residuos orgánicos correctamente.",
             progreso = 0,
-            meta = 1,
-            recompensa = 20,
+            meta = 30,
+            recompensa = 100,
             completada = false
         ),
         MissionItem(
             id = "m3",
-            titulo = "Visita un punto verde",
-            descripcion = "Consulta un punto de reciclaje cercano.",
+            titulo = "Recicla por 30 días",
+            descripcion = "Mantente activo reciclando durante 30 días.",
             progreso = 0,
-            meta = 1,
-            recompensa = 15,
+            meta = 30,
+            recompensa = 150,
             completada = false
         )
     )
@@ -778,14 +780,20 @@ fun crearDatosInicialesUsuario(uid: String) {
         ),
         BadgeItem(
             id = "l2",
-            titulo = "Reciclador inicial",
-            descripcion = "Completa tu primer registro.",
+            titulo = "Maestro de botellas",
+            descripcion = "Completaste la misión de reciclar 30 botellas.",
             desbloqueado = false
         ),
         BadgeItem(
             id = "l3",
-            titulo = "Explorador verde",
-            descripcion = "Consulta un punto de reciclaje.",
+            titulo = "Guardián orgánico",
+            descripcion = "Completaste la misión de reciclar 30 orgánicos.",
+            desbloqueado = false
+        ),
+        BadgeItem(
+            id = "l4",
+            titulo = "Constancia verde",
+            descripcion = "Completaste la misión de reciclar durante 30 días.",
             desbloqueado = false
         )
     )
@@ -804,6 +812,70 @@ fun crearDatosInicialesUsuario(uid: String) {
             .collection("logros")
             .document(logro.id)
             .set(logro)
+    }
+}
+
+fun calcularNivel(puntos: Int): String {
+    return when {
+        puntos >= 300 -> "Experto"
+        puntos >= 150 -> "Avanzado"
+        puntos >= 50 -> "Intermedio"
+        else -> "Inicial"
+    }
+}
+
+fun desbloquearLogroSegunMision(uid: String, missionId: String) {
+    val db = Firebase.firestore
+
+    val logroId = when (missionId) {
+        "m1" -> "l2"
+        "m2" -> "l3"
+        "m3" -> "l4"
+        else -> null
+    } ?: return
+
+    db.collection("usuarios")
+        .document(uid)
+        .collection("logros")
+        .document(logroId)
+        .update("desbloqueado", true)
+}
+
+fun completarPasoMision(uid: String, mission: MissionItem) {
+    val db = Firebase.firestore
+    val missionRef = db.collection("usuarios")
+        .document(uid)
+        .collection("misiones")
+        .document(mission.id)
+
+    val userRef = db.collection("usuarios").document(uid)
+
+    val nuevoProgreso = (mission.progreso + 1).coerceAtMost(mission.meta)
+    val estabaCompleta = mission.completada
+    val ahoraCompleta = nuevoProgreso >= mission.meta
+
+    missionRef.update(
+        mapOf(
+            "progreso" to nuevoProgreso,
+            "completada" to ahoraCompleta
+        )
+    ).addOnSuccessListener {
+        if (!estabaCompleta && ahoraCompleta) {
+            userRef.get().addOnSuccessListener { userDoc ->
+                val userProfile = userDoc.toObject<UserProfile>() ?: return@addOnSuccessListener
+                val nuevosPuntos = userProfile.puntos + mission.recompensa
+                val nuevoNivel = calcularNivel(nuevosPuntos)
+
+                userRef.update(
+                    mapOf(
+                        "puntos" to nuevosPuntos,
+                        "nivel" to nuevoNivel
+                    )
+                )
+            }
+
+            desbloquearLogroSegunMision(uid, mission.id)
+        }
     }
 }
 
@@ -1286,49 +1358,63 @@ fun ProfileScreen(
     var badges by remember { mutableStateOf(listOf<BadgeItem>()) }
     var registros by remember { mutableStateOf(listOf<RegistroItem>()) }
     var loading by remember { mutableStateOf(true) }
-    var refreshKey by remember { mutableIntStateOf(0) }
 
     var nombreEdit by remember { mutableStateOf("") }
     var apellidoEdit by remember { mutableStateOf("") }
     var fechaEdit by remember { mutableStateOf("") }
 
-    LaunchedEffect(user?.uid, refreshKey) {
+    DisposableEffect(user?.uid) {
         val uid = user?.uid
+
         if (uid == null) {
             loading = false
-            return@LaunchedEffect
+            onDispose { }
+        } else {
+            loading = true
+
+            val listeners = mutableListOf<ListenerRegistration>()
+
+            val perfilListener = db.collection("usuarios")
+                .document(uid)
+                .addSnapshotListener { document, _ ->
+                    if (document != null && document.exists()) {
+                        val data = document.toObject<UserProfile>()
+                        if (data != null) {
+                            profile = data
+                            nombreEdit = data.nombre
+                            apellidoEdit = data.apellido
+                            fechaEdit = data.fechaNacimiento
+                        }
+                    }
+                    loading = false
+                }
+
+            val logrosListener = db.collection("usuarios")
+                .document(uid)
+                .collection("logros")
+                .addSnapshotListener { snapshot, _ ->
+                    badges = snapshot?.documents?.mapNotNull { doc ->
+                        doc.toObject<BadgeItem>()?.copy(id = doc.id)
+                    } ?: emptyList()
+                }
+
+            val registrosListener = db.collection("usuarios")
+                .document(uid)
+                .collection("registros")
+                .addSnapshotListener { snapshot, _ ->
+                    registros = snapshot?.documents?.mapNotNull { doc ->
+                        doc.toObject<RegistroItem>()?.copy(id = doc.id)
+                    } ?: emptyList()
+                }
+
+            listeners.add(perfilListener)
+            listeners.add(logrosListener)
+            listeners.add(registrosListener)
+
+            onDispose {
+                listeners.forEach { it.remove() }
+            }
         }
-
-        loading = true
-
-        db.collection("usuarios").document(uid).get()
-            .addOnSuccessListener { document ->
-                val data = document.toObject<UserProfile>()
-                if (data != null) {
-                    profile = data
-                    nombreEdit = data.nombre
-                    apellidoEdit = data.apellido
-                    fechaEdit = data.fechaNacimiento
-                }
-                loading = false
-            }
-            .addOnFailureListener {
-                loading = false
-            }
-
-        db.collection("usuarios").document(uid).collection("logros").get()
-            .addOnSuccessListener { snapshot ->
-                badges = snapshot.documents.mapNotNull { doc ->
-                    doc.toObject<BadgeItem>()?.copy(id = doc.id)
-                }
-            }
-
-        db.collection("usuarios").document(uid).collection("registros").get()
-            .addOnSuccessListener { snapshot ->
-                registros = snapshot.documents.mapNotNull { doc ->
-                    doc.toObject<RegistroItem>()?.copy(id = doc.id)
-                }
-            }
     }
 
     Column(
@@ -1427,8 +1513,10 @@ fun ProfileScreen(
                                     val uid = user?.uid ?: return@ProfileEditableRow
                                     db.collection("usuarios")
                                         .document(uid)
-                                        .update("nombre", nombreEdit)
-                                        .addOnSuccessListener { refreshKey++ }
+                                        .set(
+                                            mapOf("nombre" to nombreEdit.trim()),
+                                            SetOptions.merge()
+                                        )
                                 }
                             )
 
@@ -1442,8 +1530,10 @@ fun ProfileScreen(
                                     val uid = user?.uid ?: return@ProfileEditableRow
                                     db.collection("usuarios")
                                         .document(uid)
-                                        .update("apellido", apellidoEdit)
-                                        .addOnSuccessListener { refreshKey++ }
+                                        .set(
+                                            mapOf("apellido" to apellidoEdit.trim()),
+                                            SetOptions.merge()
+                                        )
                                 }
                             )
 
@@ -1457,8 +1547,10 @@ fun ProfileScreen(
                                     val uid = user?.uid ?: return@ProfileEditableRow
                                     db.collection("usuarios")
                                         .document(uid)
-                                        .update("fechaNacimiento", fechaEdit)
-                                        .addOnSuccessListener { refreshKey++ }
+                                        .set(
+                                            mapOf("fechaNacimiento" to fechaEdit.trim()),
+                                            SetOptions.merge()
+                                        )
                                 }
                             )
                         }
@@ -1475,7 +1567,7 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "Puntos: ${profile.puntos}   |   Nivel: ${profile.nivel}",
+                        text = "Puntos: ${profile.puntos}  |  Nivel: ${profile.nivel}",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium
                     )
@@ -1628,43 +1720,35 @@ fun MissionsScreen(
     var missions by remember { mutableStateOf(listOf<MissionItem>()) }
     var loading by remember { mutableStateOf(true) }
 
-    LaunchedEffect(auth.currentUser?.uid) {
+    DisposableEffect(auth.currentUser?.uid) {
         val uid = auth.currentUser?.uid
+
         if (uid == null) {
             loading = false
-            return@LaunchedEffect
-        }
+            onDispose { }
+        } else {
+            val misionesRef = db.collection("usuarios")
+                .document(uid)
+                .collection("misiones")
 
-        val misionesRef = db.collection("usuarios")
-            .document(uid)
-            .collection("misiones")
-
-        misionesRef.get()
-            .addOnSuccessListener { snapshot ->
-
-                if (snapshot.size() == 0) {
-                    // 🚀 CREAR MISIONES SI NO EXISTEN
-                    crearDatosInicialesUsuario(uid)
-
-                    // 🔄 VOLVER A CARGAR
-                    misionesRef.get().addOnSuccessListener { newSnapshot ->
-                        missions = newSnapshot.documents.mapNotNull { doc ->
-                            doc.toObject<MissionItem>()?.copy(id = doc.id)
-                        }
-                        loading = false
+            misionesRef.get()
+                .addOnSuccessListener { snapshot ->
+                    if (snapshot.isEmpty) {
+                        crearDatosInicialesUsuario(uid)
                     }
-
-                } else {
-                    // ✅ YA EXISTEN
-                    missions = snapshot.documents.mapNotNull { doc ->
-                        doc.toObject<MissionItem>()?.copy(id = doc.id)
-                    }
-                    loading = false
                 }
-            }
-            .addOnFailureListener {
+
+            val listener = misionesRef.addSnapshotListener { snapshot, _ ->
+                missions = snapshot?.documents?.mapNotNull { doc ->
+                    doc.toObject<MissionItem>()?.copy(id = doc.id)
+                } ?: emptyList()
                 loading = false
             }
+
+            onDispose {
+                listener.remove()
+            }
+        }
     }
 
     Column(
@@ -1679,7 +1763,6 @@ fun MissionsScreen(
                 .weight(1f)
                 .padding(16.dp)
         ) {
-
             Text(
                 text = "← Volver",
                 fontWeight = FontWeight.Bold,
@@ -1701,20 +1784,15 @@ fun MissionsScreen(
             } else if (missions.isEmpty()) {
                 Text("No hay misiones registradas.")
             } else {
-
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-
                     items(missions) { mission ->
-
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(Color.White, RoundedCornerShape(22.dp))
                                 .padding(16.dp)
                         ) {
-
                             Column {
-
                                 Text(
                                     text = mission.titulo,
                                     fontSize = 18.sp,
@@ -1736,7 +1814,7 @@ fun MissionsScreen(
                                 )
 
                                 LinearProgressIndicator(
-                                    progress = mission.progreso.toFloat() / mission.meta,
+                                    progress = { mission.progreso.toFloat() / mission.meta.toFloat() },
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(8.dp),
@@ -1752,10 +1830,7 @@ fun MissionsScreen(
 
                                 Text(
                                     text = if (mission.completada) "Completada ✅" else "En progreso ⏳",
-                                    color = if (mission.completada)
-                                        Color(0xFF2E7D32)
-                                    else
-                                        Color(0xFFB78B66),
+                                    color = if (mission.completada) Color(0xFF2E7D32) else Color(0xFFB78B66),
                                     fontWeight = FontWeight.Bold
                                 )
 
@@ -1764,19 +1839,7 @@ fun MissionsScreen(
                                 Button(
                                     onClick = {
                                         val uid = auth.currentUser?.uid ?: return@Button
-                                        val nuevo_progreso = mission.progreso + 1
-                                        val completada = nuevo_progreso >= mission.meta
-
-                                        db.collection("usuarios")
-                                            .document(uid)
-                                            .collection("misiones")
-                                            .document(mission.id)
-                                            .update(
-                                                mapOf(
-                                                    "progreso" to nuevo_progreso,
-                                                    "completada" to completada
-                                                )
-                                            )
+                                        completarPasoMision(uid, mission)
                                     },
                                     enabled = !mission.completada,
                                     colors = ButtonDefaults.buttonColors(
@@ -1803,6 +1866,7 @@ fun MissionsScreen(
         )
     }
 }
+
 @Composable
 fun AppBottomBar(
     selected: String,
