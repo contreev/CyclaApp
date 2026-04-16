@@ -1,6 +1,7 @@
 package com.example.cyclapp
-
+import androidx.compose.material3.LinearProgressIndicator
 import android.os.Bundle
+import android.util.Log
 import android.util.Patterns
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -79,6 +80,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        Log.d("UID", FirebaseAuth.getInstance().currentUser?.uid ?: "null")
 
         setContent {
             CyclAppTheme {
@@ -1660,6 +1662,7 @@ fun MissionsScreen(
                 .weight(1f)
                 .padding(16.dp)
         ) {
+
             Text(
                 text = "← Volver",
                 fontWeight = FontWeight.Bold,
@@ -1681,15 +1684,20 @@ fun MissionsScreen(
             } else if (missions.isEmpty()) {
                 Text("No hay misiones registradas.")
             } else {
+
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+
                     items(missions) { mission ->
+
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(Color.White, RoundedCornerShape(22.dp))
                                 .padding(16.dp)
                         ) {
+
                             Column {
+
                                 Text(
                                     text = mission.titulo,
                                     fontSize = 18.sp,
@@ -1710,24 +1718,57 @@ fun MissionsScreen(
                                     fontWeight = FontWeight.Bold
                                 )
 
+                                LinearProgressIndicator(
+                                    progress = mission.progreso.toFloat() / mission.meta,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(8.dp),
+                                    color = Color(0xFFB8CB6A)
+                                )
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
                                 Text(
                                     text = "Recompensa: ${mission.recompensa} pts",
                                     fontWeight = FontWeight.Medium
                                 )
 
                                 Text(
-                                    text = if (mission.completada) {
-                                        "Estado: completada"
-                                    } else {
-                                        "Estado: pendiente"
-                                    },
-                                    color = if (mission.completada) {
+                                    text = if (mission.completada) "Completada ✅" else "En progreso ⏳",
+                                    color = if (mission.completada)
                                         Color(0xFF2E7D32)
-                                    } else {
-                                        Color(0xFFD32F2F)
-                                    },
+                                    else
+                                        Color(0xFFB78B66),
                                     fontWeight = FontWeight.Bold
                                 )
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Button(
+                                    onClick = {
+                                        val uid = auth.currentUser?.uid ?: return@Button
+
+                                        db.collection("usuarios")
+                                            .document(uid)
+                                            .collection("misiones")
+                                            .document(mission.id)
+                                            .update(
+                                                mapOf(
+                                                    "progreso" to mission.meta,
+                                                    "completada" to true
+                                                )
+                                            )
+                                    },
+                                    enabled = !mission.completada,
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFFB8CB6A)
+                                    )
+                                ) {
+                                    Text(
+                                        text = if (mission.completada) "Completada" else "Completar",
+                                        color = Color.White
+                                    )
+                                }
                             }
                         }
                     }
@@ -1743,7 +1784,6 @@ fun MissionsScreen(
         )
     }
 }
-
 @Composable
 fun AppBottomBar(
     selected: String,
