@@ -26,7 +26,8 @@ fun AppBottomBar(
     selected: String,
     onHomeClick: () -> Unit,
     onMissionsClick: () -> Unit,
-    onProfileClick: () -> Unit
+    onProfileClick: () -> Unit,
+    onCameraClick: () -> Unit = {}
 ) {
     val navGreen = Color(0xFFB8CB6A)
 
@@ -61,12 +62,14 @@ fun AppBottomBar(
             )
         }
 
-        BottomNavItem(selected = false) {
+        BottomNavItem(selected = selected == "camera") {
             Icon(
                 imageVector = Icons.Outlined.PhotoCamera,
                 contentDescription = "Cámara",
                 tint = Color.Black,
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier
+                    .size(28.dp)
+                    .clickable { onCameraClick() }
             )
         }
 
