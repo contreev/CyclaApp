@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -264,7 +265,7 @@ fun MenuScreen(
 
             BottomNavItem(selected = false) {
                 Icon(
-                    imageVector = Icons.Outlined.Home,
+                    imageVector = Icons.Outlined.PhotoCamera,
                     contentDescription = "Cámara",
                     tint = Color.Black,
                     modifier = Modifier.size(28.dp)

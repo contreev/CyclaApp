@@ -8,6 +8,7 @@ import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.ktx.toObject
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import com.google.firebase.storage.StorageException
 import com.google.firebase.storage.ktx.storage
 
 fun crearDatosInicialesUsuario(uid: String) {
@@ -157,30 +158,33 @@ fun subirFotoPerfil(
     onSuccess: () -> Unit = {},
     onError: (String) -> Unit = {}
 ) {
+    val timestamp = System.currentTimeMillis()
+
     val storageRef = Firebase.storage.reference
-        .child("profile_photos/$uid.jpg")
+        .child("profile_photos/${uid}_$timestamp.jpg")
 
     val userRef = Firebase.firestore.collection("usuarios").document(uid)
 
     storageRef.putFile(imageUri)
         .continueWithTask { task ->
             if (!task.isSuccessful) {
-                throw task.exception ?: Exception("Error subiendo foto")
+                task.exception?.let { throw it }
             }
             storageRef.downloadUrl
         }
         .addOnSuccessListener { downloadUri ->
+            val url = downloadUri.toString()
             userRef.set(
-                mapOf("fotoUrl" to downloadUri.toString()),
+                mapOf("fotoUrl" to url),
                 SetOptions.merge()
             )
                 .addOnSuccessListener { onSuccess() }
                 .addOnFailureListener { e ->
-                    onError(e.localizedMessage ?: "No se pudo guardar la URL de la foto.")
+                    onError("Error al guardar en base de datos: ${e.localizedMessage}")
                 }
         }
         .addOnFailureListener { e ->
-            onError(e.localizedMessage ?: "No se pudo subir la foto.")
+            onError("Error en la subida: ${e.localizedMessage}")
         }
 }
 
@@ -189,30 +193,22 @@ fun eliminarFotoPerfil(
     onSuccess: () -> Unit = {},
     onError: (String) -> Unit = {}
 ) {
-    val storageRef = Firebase.storage.reference
-        .child("profile_photos/$uid.jpg")
-
+    val storageRef = Firebase.storage.reference.child("profile_photos/$uid.jpg")
     val userRef = Firebase.firestore.collection("usuarios").document(uid)
 
-    storageRef.delete()
-        .addOnSuccessListener {
-            userRef.set(
-                mapOf("fotoUrl" to ""),
-                SetOptions.merge()
-            )
+    storageRef.delete().addOnCompleteListener { task ->
+        val error = task.exception
+        val isNotFoundError = error is StorageException &&
+                error.errorCode == StorageException.ERROR_OBJECT_NOT_FOUND
+
+        if (task.isSuccessful || isNotFoundError) {
+            userRef.set(mapOf("fotoUrl" to ""), SetOptions.merge())
                 .addOnSuccessListener { onSuccess() }
                 .addOnFailureListener { e ->
-                    onError(e.localizedMessage ?: "No se pudo limpiar la foto del perfil.")
+                    onError("Error al limpiar perfil: ${e.localizedMessage}")
                 }
+        } else {
+            onError(error?.localizedMessage ?: "Error desconocido al eliminar")
         }
-        .addOnFailureListener {
-            userRef.set(
-                mapOf("fotoUrl" to ""),
-                SetOptions.merge()
-            )
-                .addOnSuccessListener { onSuccess() }
-                .addOnFailureListener { e ->
-                    onError(e.localizedMessage ?: "No se pudo limpiar la foto del perfil.")
-                }
-        }
+    }
 }
