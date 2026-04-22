@@ -35,7 +35,8 @@ import com.example.cyclapp.components.CategoryCard
 fun MenuScreen(
     onLogoutClick: () -> Unit,
     onProfileClick: () -> Unit,
-    onMissionsClick: () -> Unit
+    onMissionsClick: () -> Unit,
+    onNewsClick: () -> Unit
 ) {
     val bgColor = Color(0xFFE9E9E9)
     val cardColor = Color(0xFFF8F8F8)
@@ -145,12 +146,18 @@ fun MenuScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(18.dp)
                 ) {
-                    CategoryCard(
-                        modifier = Modifier.weight(1f),
-                        title = "Noticias",
-                        imageRes = R.drawable.logo,
-                        arrowColor = accentBrown
-                    )
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onNewsClick() }
+                    ) {
+                        CategoryCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            title = "Noticias",
+                            imageRes = R.drawable.logo,
+                            arrowColor = accentBrown
+                        )
+                    }
 
                     Box(
                         modifier = Modifier

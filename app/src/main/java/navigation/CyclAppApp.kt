@@ -7,6 +7,7 @@ import com.example.cyclapp.screens.AuthScreen
 import com.example.cyclapp.screens.ForgotPasswordScreen
 import com.example.cyclapp.screens.MenuScreen
 import com.example.cyclapp.screens.MissionsScreen
+import com.example.cyclapp.screens.NewsScreen
 import com.example.cyclapp.screens.ProfileScreen
 import com.example.cyclapp.screens.WelcomeScreen
 import com.google.firebase.auth.FirebaseAuth
@@ -51,7 +52,12 @@ fun CyclAppApp() {
                 screen = "welcome"
             },
             onProfileClick = { screen = "profile" },
-            onMissionsClick = { screen = "missions" }
+            onMissionsClick = { screen = "missions" },
+            onNewsClick = { screen = "news" }
+        )
+
+        "news" -> NewsScreen(
+            onBackClick = { screen = "menu" }
         )
 
         "profile" -> ProfileScreen(
