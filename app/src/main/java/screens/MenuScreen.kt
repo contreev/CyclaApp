@@ -40,7 +40,8 @@ fun MenuScreen(
     onProfileClick: () -> Unit,
     onMissionsClick: () -> Unit,
     onNewsClick: () -> Unit,
-    onWasteClick: () -> Unit
+    onWasteClick: () -> Unit,
+    onMapClick: () -> Unit
 ) {
     val bgColor = Color(0xFFE9E9E9)
     val cardColor = Color(0xFFF8F8F8)
@@ -137,12 +138,18 @@ fun MenuScreen(
                             arrowColor = accentBrown
                         )
                     }
-                    CategoryCard(
-                        modifier = Modifier.weight(1f),
-                        title = "Puntos de reciclaje",
-                        imageRes = R.drawable.puntos,
-                        arrowColor = accentBrown
-                    )
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onMapClick() }
+                    ) {
+                        CategoryCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            title = "Puntos de reciclaje",
+                            imageRes = R.drawable.puntos,
+                            arrowColor = accentBrown
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
