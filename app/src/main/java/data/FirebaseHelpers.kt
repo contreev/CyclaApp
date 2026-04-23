@@ -1,5 +1,6 @@
 package com.example.cyclapp.data
 
+import android.content.Context
 import android.net.Uri
 import android.util.Log
 import com.example.cyclapp.model.BadgeItem
@@ -7,50 +8,111 @@ import com.example.cyclapp.model.MissionItem
 import com.example.cyclapp.model.RecyclingPoint
 import com.example.cyclapp.model.Review
 import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.ktx.toObject
 import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.storage.ktx.storage
 import com.google.firebase.ktx.Firebase
+import com.google.gson.JsonParser
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 
+/**
+ * Sistema de 8 Logros Innovadores con limpieza profunda.
+ */
 fun crearDatosInicialesUsuario(uid: String) {
     val db = Firebase.firestore
-    val batch = db.batch()
+    val userRef = db.collection("usuarios").document(uid)
+    val misionesRef = userRef.collection("misiones")
+    val logrosRef = userRef.collection("logros")
     
-    val misiones = listOf(
-        MissionItem(id = "m1", titulo = "Primer Reciclaje", descripcion = "Lleva tu primer residuo a un punto de acopio.", meta = 1, recompensa = 50),
-        MissionItem(id = "m2", titulo = "Experto en Plástico", descripcion = "Recicla 5 botellas de plástico.", meta = 5, recompensa = 100),
-        MissionItem(id = "m3", titulo = "Comunidad Activa", descripcion = "Deja 3 reseñas en puntos de reciclaje.", meta = 3, recompensa = 150)
+    val misionesOficiales = listOf(
+        MissionItem("m1", "Recicla 3 botellas", "Deposita 3 botellas plásticas.", 3, 30),
+        MissionItem("m2", "Primer registro", "Realiza tu primer registro de reciclaje.", 1, 20),
+        MissionItem("m3", "Visita un punto verde", "Consulta un punto cercano.", 1, 15),
+        MissionItem("m4", "Eco-Explorador", "Visita 3 puntos diferentes.", 3, 100),
+        MissionItem("m5", "Crítico Verde", "Deja 5 reseñas.", 5, 150),
+        MissionItem("m6", "Rey del Plástico", "Registra 10 botellas.", 10, 200),
+        MissionItem("m7", "Cero Papel", "Recicla 5 kg de papel.", 5, 120),
+        MissionItem("m8", "Vidrio Brillante", "Lleva 8 botellas de vidrio.", 8, 180),
+        MissionItem("m9", "Pilas Fuera", "Recicla 2 pilas.", 2, 250),
+        MissionItem("m10", "Reciclador Constante", "Registro por 3 días.", 3, 400)
     )
 
-    misiones.forEach { mission ->
-        val ref = db.collection("usuarios").document(uid).collection("misiones").document(mission.id)
-        batch.set(ref, mission)
-    }
-
-    val logros = listOf(
-        BadgeItem(id = "b1", titulo = "Reciclador Novato", descripcion = "Has empezado tu camino ecológico."),
-        BadgeItem(id = "b2", titulo = "Héroe del Vidrio", descripcion = "Reciclaste 10 botellas de vidrio.")
+    val logrosOficiales = listOf(
+        BadgeItem("e1", "🌱 Semilla", "1 misión completada.", false),
+        BadgeItem("e2", "🌿 Brote", "4 misiones completadas.", false),
+        BadgeItem("e3", "🌳 Árbol", "7 misiones completadas.", false),
+        BadgeItem("e4", "✨ Espíritu de la Naturaleza", "10 misiones completadas.", false),
+        BadgeItem("s1", "🧪 Alquimista del Plástico", "Completaste m1 y m6.", false),
+        BadgeItem("s2", "🎒 Eco-Viajero", "Completaste m4.", false),
+        BadgeItem("s3", "📢 Voz Ecológica", "Completaste m5.", false),
+        BadgeItem("s4", "💎 Maestro del Vidrio", "Completaste m8.", false)
     )
 
-    logros.forEach { badge ->
-        val ref = db.collection("usuarios").document(uid).collection("logros").document(badge.id)
-        batch.set(ref, badge)
+    logrosRef.get().addOnSuccessListener { snapshot ->
+        val batch = db.batch()
+        snapshot.documents.forEach { batch.delete(it.reference) }
+        logrosOficiales.forEach { b -> batch.set(logrosRef.document(b.id), b) }
+        
+        batch.commit().addOnSuccessListener {
+            misionesRef.get().addOnSuccessListener { mSnap ->
+                val mBatch = db.batch()
+                misionesOficiales.forEach { m ->
+                    if (mSnap.documents.none { it.id == m.id }) mBatch.set(misionesRef.document(m.id), m)
+                }
+                mBatch.commit().addOnSuccessListener {
+                    sincronizarPuntosYLogros(uid)
+                }
+            }
+        }
     }
+}
 
-    batch.commit().addOnFailureListener { e ->
-        Log.e("FirebaseHelpers", "Error al crear datos iniciales: ${e.message}")
+fun sincronizarPuntosYLogros(uid: String) {
+    val db = Firebase.firestore
+    val userRef = db.collection("usuarios").document(uid)
+    val misionesRef = userRef.collection("misiones")
+    val logrosRef = userRef.collection("logros")
+
+    misionesRef.get().addOnSuccessListener { mSnap ->
+        val misiones = mSnap.documents.mapNotNull { it.toObject<MissionItem>()?.copy(id = it.id) }
+        val completadas = misiones.filter { it.completada }
+        val count = completadas.size
+        val totalPuntos = completadas.sumOf { it.recompensa }
+
+        userRef.update(mapOf("puntos" to totalPuntos, "nivel" to when {
+            totalPuntos > 1000 -> "Maestro"
+            totalPuntos > 500 -> "Avanzado"
+            else -> "Inicial"
+        }))
+
+        val batch = db.batch()
+        batch.update(logrosRef.document("e1"), "desbloqueado", count >= 1)
+        batch.update(logrosRef.document("e2"), "desbloqueado", count >= 4)
+        batch.update(logrosRef.document("e3"), "desbloqueado", count >= 7)
+        batch.update(logrosRef.document("e4"), "desbloqueado", count >= 10)
+        
+        val m1yM6 = completadas.any { it.id == "m1" } && completadas.any { it.id == "m6" }
+        batch.update(logrosRef.document("s1"), "desbloqueado", m1yM6)
+        batch.update(logrosRef.document("s2"), "desbloqueado", completadas.any { it.id == "m4" })
+        batch.update(logrosRef.document("s3"), "desbloqueado", completadas.any { it.id == "m5" })
+        batch.update(logrosRef.document("s4"), "desbloqueado", completadas.any { it.id == "m8" })
+        
+        batch.commit()
     }
 }
 
 fun completarPasoMision(uid: String, mission: MissionItem) {
     val db = Firebase.firestore
     val missionRef = db.collection("usuarios").document(uid).collection("misiones").document(mission.id)
-    val userRef = db.collection("usuarios").document(uid)
-
     if (mission.completada) return
 
     val nuevoProgreso = mission.progreso + 1
@@ -58,133 +120,89 @@ fun completarPasoMision(uid: String, mission: MissionItem) {
 
     db.runTransaction { transaction ->
         if (seCompleto) {
-            transaction.update(missionRef, "progreso", mission.meta)
-            transaction.update(missionRef, "completada", true)
-            transaction.update(userRef, "puntos", FieldValue.increment(mission.recompensa.toLong()))
+            transaction.update(missionRef, "progreso", mission.meta, "completada", true)
         } else {
             transaction.update(missionRef, "progreso", nuevoProgreso)
         }
         null
-    }.addOnFailureListener { e ->
-        Log.e("FirebaseHelpers", "Error al actualizar progreso: ${e.message}")
-    }
+    }.addOnSuccessListener { if (seCompleto) sincronizarPuntosYLogros(uid) }
 }
 
-fun getPuntosReciclaje(onPuntosChanged: (List<RecyclingPoint>) -> Unit) {
+fun getPuntosReciclaje(onUpdate: (List<RecyclingPoint>) -> Unit) {
     val db = Firebase.firestore
-    
-    db.collection("puntos_reciclaje").addSnapshotListener { snapshot, e ->
-        if (e != null) {
-            Log.e("FirebaseHelpers", "Error al escuchar puntos: ${e.message}")
-            return@addSnapshotListener
-        }
-        
-        val puntos = snapshot?.mapNotNull { it.toObject<RecyclingPoint>().copy(id = it.id) } ?: emptyList()
-        onPuntosChanged(puntos)
-        
-        // Si hay muy pocos puntos, insertamos los masivos automáticamente
-        if (puntos.size <= 3) {
-            insertarPuntosMasivosBogota()
+    db.collection("puntos_reciclaje").addSnapshotListener { snapshot, _ ->
+        if (snapshot != null) {
+            val puntos = snapshot.documents.mapNotNull { it.toObject<RecyclingPoint>()?.copy(id = it.id) }
+            onUpdate(puntos)
         }
     }
 }
 
-fun insertarPuntosMasivosBogota() {
-    val db = Firebase.firestore
-    val puntos = listOf(
-        RecyclingPoint(name = "Punto Verde Chapinero", address = "Calle 60 #13-40", categories = listOf("Plástico", "Vidrio"), latitude = 4.6437, longitude = -74.0628),
-        RecyclingPoint(name = "EcoPunto Unicentro", address = "Av. Carrera 15 #124-30", categories = listOf("Pilas", "Electrónicos"), latitude = 4.7015, longitude = -74.0410),
-        RecyclingPoint(name = "Recicladora Central", address = "Carrera 10 #15-20", categories = listOf("Papel", "Cartón"), latitude = 4.6028, longitude = -74.0750),
-        RecyclingPoint(name = "Punto Eco Suba", address = "Calle 145 #92-30", categories = listOf("Plástico", "Metal"), latitude = 4.7430, longitude = -74.0850),
-        RecyclingPoint(name = "Reciclaje Kennedy", address = "Calle 26 Sur #78-40", categories = listOf("Papel", "Vidrio"), latitude = 4.6310, longitude = -74.1380),
-        RecyclingPoint(name = "EcoFontibón", address = "Calle 17 #99-20", categories = listOf("Electrónicos", "Baterías"), latitude = 4.6750, longitude = -74.1450),
-        RecyclingPoint(name = "Punto Verde Bosa", address = "Calle 59 Sur #80-10", categories = listOf("Plástico", "Cartón"), latitude = 4.6150, longitude = -74.1850),
-        RecyclingPoint(name = "Recicla Engativá", address = "Calle 80 #102-50", categories = listOf("Vidrio", "Metal"), latitude = 4.7120, longitude = -74.1120),
-        RecyclingPoint(name = "EcoTeusaquillo", address = "Carrera 24 #45-10", categories = listOf("Papel", "Plástico"), latitude = 4.6380, longitude = -74.0850),
-        RecyclingPoint(name = "Punto Limpio Usaquén", address = "Calle 116 #7-15", categories = listOf("Orgánicos", "Plástico"), latitude = 4.6980, longitude = -74.0320),
-        RecyclingPoint(name = "Centro Reciclaje Alquería", address = "Carrera 52 #42-10 Sur", categories = listOf("Plástico", "Chatarra"), latitude = 4.5950, longitude = -74.1250),
-        RecyclingPoint(name = "EcoPunto Galerías", address = "Calle 53 #21-40", categories = listOf("Papel", "Cartón"), latitude = 4.6410, longitude = -74.0720),
-        RecyclingPoint(name = "Reciclaje Salitre", address = "Av. Esperanza #68-20", categories = listOf("Vidrio", "Electrónicos"), latitude = 4.6580, longitude = -74.1080),
-        RecyclingPoint(name = "Punto Verde Restrepo", address = "Calle 18 Sur #16-30", categories = listOf("Plástico", "Metal"), latitude = 4.5850, longitude = -74.1020),
-        RecyclingPoint(name = "EcoUsaquén Cedritos", address = "Calle 142 #12-40", categories = listOf("Papel", "Vidrio"), latitude = 4.7210, longitude = -74.0480),
-        RecyclingPoint(name = "Recicla Suba Pinar", address = "Carrera 92 #152-10", categories = listOf("Plástico", "Cartón"), latitude = 4.7550, longitude = -74.0920),
-        RecyclingPoint(name = "Punto Limpio Modelia", address = "Calle 24 #75-10", categories = listOf("Metal", "Plástico"), latitude = 4.6650, longitude = -74.1220),
-        RecyclingPoint(name = "EcoPunto Castilla", address = "Calle 8 #79-40", categories = listOf("Papel", "Vidrio"), latitude = 4.6450, longitude = -74.1480),
-        RecyclingPoint(name = "Reciclaje Quirigua", address = "Calle 82 #91-20", categories = listOf("Plástico", "Metal"), latitude = 4.7080, longitude = -74.0980),
-        RecyclingPoint(name = "Punto Verde Venecia", address = "Autopista Sur #52-10", categories = listOf("Cartón", "Vidrio"), latitude = 4.5920, longitude = -74.1380),
-        RecyclingPoint(name = "EcoSuba La Gaitana", address = "Calle 132 #125-20", categories = listOf("Plástico", "Vidrio"), latitude = 4.7480, longitude = -74.1180),
-        RecyclingPoint(name = "Recicla Kennedy Central", address = "Carrera 78K #35-10", categories = listOf("Papel", "Plástico"), latitude = 4.6220, longitude = -74.1520),
-        RecyclingPoint(name = "Punto Verde San Cristóbal", address = "Calle 11 Sur #12-30", categories = listOf("Vidrio", "Metal"), latitude = 4.5780, longitude = -74.0880),
-        RecyclingPoint(name = "EcoRafael Uribe", address = "Calle 32 Sur #24-10", categories = listOf("Cartón", "Plástico"), latitude = 4.5820, longitude = -74.1120),
-        RecyclingPoint(name = "Punto Limpio Tunjuelito", address = "Calle 52 Sur #13-40", categories = listOf("Metal", "Plástico"), latitude = 4.5680, longitude = -74.1320),
-        RecyclingPoint(name = "Recicla Puente Aranda", address = "Calle 13 #62-30", categories = listOf("Vidrio", "Electrónicos"), latitude = 4.6320, longitude = -74.1180),
-        RecyclingPoint(name = "EcoBarrios Unidos", address = "Calle 68 #24-10", categories = listOf("Papel", "Metal"), latitude = 4.6680, longitude = -74.0780),
-        RecyclingPoint(name = "Punto Verde Santa Fe", address = "Carrera 7 #19-20", categories = listOf("Plástico", "Vidrio"), latitude = 4.6050, longitude = -74.0680),
-        RecyclingPoint(name = "Recicla Candelaria", address = "Calle 11 #3-40", categories = listOf("Papel", "Cartón"), latitude = 4.5980, longitude = -74.0720),
-        RecyclingPoint(name = "EcoAntonio Nariño", address = "Calle 1 Sur #18-20", categories = listOf("Plástico", "Metal"), latitude = 4.5880, longitude = -74.0980)
-    )
-    
-    val batch = db.batch()
-    puntos.forEach { punto ->
-        val ref = db.collection("puntos_reciclaje").document()
-        batch.set(ref, punto)
-    }
-    
-    batch.commit().addOnSuccessListener {
-        Log.d("FirebaseHelpers", "Inserción masiva completada con éxito.")
-    }
-}
-
-fun agregarOEditarResena(puntoId: String, uid: String, resena: Review, onSuccess: () -> Unit, onError: (Exception) -> Unit) {
+fun agregarOEditarResena(puntoId: String, uid: String, resena: Review, onSuccess: () -> Unit, onError: (String) -> Unit) {
     val db = Firebase.firestore
     val puntoRef = db.collection("puntos_reciclaje").document(puntoId)
-    
     db.runTransaction { transaction ->
         val snapshot = transaction.get(puntoRef)
         val punto = snapshot.toObject<RecyclingPoint>() ?: return@runTransaction
-        
-        val reviews = punto.reviews.toMutableList()
-        val index = reviews.indexOfFirst { it.id == uid }
-        
-        if (index != -1) {
-            reviews[index] = resena.copy(id = uid)
-        } else {
-            reviews.add(resena.copy(id = uid))
-        }
-        
-        val nuevoPromedio = if (reviews.isEmpty()) 0.0 else reviews.map { it.rating }.average()
-        
-        transaction.update(puntoRef, "reviews", reviews)
-        transaction.update(puntoRef, "averageRating", nuevoPromedio)
-    }.addOnSuccessListener { onSuccess() }
-    .addOnFailureListener { onError(it) }
+        val nuevasResenas = punto.reviews.toMutableList()
+        val index = nuevasResenas.indexOfFirst { it.id == uid }
+        val resenaConId = resena.copy(id = uid)
+        if (index != -1) nuevasResenas[index] = resenaConId else nuevasResenas.add(resenaConId)
+        val nuevoPromedio = if (nuevasResenas.isNotEmpty()) nuevasResenas.map { it.rating }.average() else 0.0
+        transaction.update(puntoRef, "reviews", nuevasResenas, "averageRating", nuevoPromedio)
+        null
+    }.addOnSuccessListener { onSuccess() }.addOnFailureListener { onError(it.message ?: "Error") }
 }
 
-fun subirFotoPerfil(uid: String, imageUri: Uri, onSuccess: () -> Unit, onError: (String) -> Unit) {
-    val storageRef = Firebase.storage.reference.child("perfiles/$uid.jpg")
-    val db = Firebase.firestore
+fun subirFotoPerfil(context: Context, uid: String, imageUri: Uri, onSuccess: () -> Unit, onError: (String) -> Unit) {
+    val cloudName = "dhcsw9o8y"
+    val uploadPreset = "cyclapp_prese"
 
-    storageRef.putFile(imageUri)
-        .addOnSuccessListener {
-            storageRef.downloadUrl.addOnSuccessListener { uri ->
-                db.collection("usuarios").document(uid)
-                    .update("fotoUrl", uri.toString())
-                    .addOnSuccessListener { onSuccess() }
-                    .addOnFailureListener { e -> onError(e.message ?: "Error al actualizar Firestore") }
+    CoroutineScope(Dispatchers.IO).launch {
+        try {
+            val inputStream = context.contentResolver.openInputStream(imageUri)
+            val bytes = inputStream?.readBytes() ?: throw Exception("No se pudo leer la imagen")
+            
+            val client = OkHttpClient()
+            val requestBody = MultipartBody.Builder()
+                .setType(MultipartBody.FORM)
+                .addFormDataPart("file", "profile.jpg", bytes.toRequestBody("image/jpeg".toMediaTypeOrNull()))
+                .addFormDataPart("upload_preset", uploadPreset)
+                .build()
+
+            val request = Request.Builder()
+                .url("https://api.cloudinary.com/v1_1/$cloudName/image/upload")
+                .post(requestBody)
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    val bodyString = response.body?.string() ?: ""
+                    val json = JsonParser.parseString(bodyString).asJsonObject
+                    val url = json.get("secure_url").asString
+                    
+                    Firebase.firestore.collection("usuarios").document(uid)
+                        .update("fotoUrl", url)
+                        .await()
+                    
+                    // También guardamos en la colección que pediste
+                    Firebase.firestore.collection("fotos_perfil").document(uid).set(mapOf(
+                        "uid" to uid,
+                        "url" to url,
+                        "fecha" to FieldValue.serverTimestamp()
+                    )).await()
+                    
+                    withContext(Dispatchers.Main) { onSuccess() }
+                } else {
+                    withContext(Dispatchers.Main) { onError("Error Cloudinary: ${response.code} ${response.message}") }
+                }
             }
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) { onError(e.message ?: "Error desconocido") }
         }
-        .addOnFailureListener { e -> onError(e.message ?: "Error al subir imagen") }
+    }
 }
 
 fun eliminarFotoPerfil(uid: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
-    val storageRef = Firebase.storage.reference.child("perfiles/$uid.jpg")
-    val db = Firebase.firestore
-
-    storageRef.delete()
-        .addOnCompleteListener {
-            db.collection("usuarios").document(uid)
-                .update("fotoUrl", "")
-                .addOnSuccessListener { onSuccess() }
-                .addOnFailureListener { e -> onError(e.message ?: "Error al actualizar Firestore") }
-        }
+    Firebase.firestore.collection("usuarios").document(uid).set(mapOf("fotoUrl" to ""), SetOptions.merge()).addOnSuccessListener { onSuccess() }
 }

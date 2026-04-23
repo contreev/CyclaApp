@@ -2,11 +2,7 @@ package com.example.cyclapp.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountCircle
@@ -27,6 +23,7 @@ fun AppBottomBar(
     onHomeClick: () -> Unit,
     onMissionsClick: () -> Unit,
     onProfileClick: () -> Unit,
+    onMapClick: () -> Unit = {},
     onCameraClick: () -> Unit = {}
 ) {
     val navGreen = Color(0xFFB8CB6A)
@@ -53,12 +50,14 @@ fun AppBottomBar(
             )
         }
 
-        BottomNavItem(selected = false) {
+        BottomNavItem(selected = selected == "map") {
             Icon(
                 imageVector = Icons.Outlined.LocationOn,
                 contentDescription = "Ubicación",
                 tint = Color.Black,
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier
+                    .size(28.dp)
+                    .clickable { onMapClick() }
             )
         }
 

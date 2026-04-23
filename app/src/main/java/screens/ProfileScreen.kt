@@ -7,38 +7,19 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.outlined.AccountCircle
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,9 +27,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.text.font.FontWeight
 import coil.compose.AsyncImage
 import com.example.cyclapp.R
 import com.example.cyclapp.components.AppBottomBar
@@ -76,8 +57,12 @@ fun ProfileScreen(
     val db = Firebase.firestore
     val user = auth.currentUser
 
-    val bg = Color(0xFFE9E9E9)
-    val card = Color(0xFFF5F5F5)
+    val mainGreen = Color(0xFFB8CB6A)
+    val bgLight = Color(0xFFF8F9FA)
+    val cardBg = Color.White
+    val textPrimary = Color(0xFF2D3436)
+    val textSecondary = Color(0xFF636E72)
+    val dangerRed = Color(0xFFEF5350)
 
     var profile by remember { mutableStateOf(UserProfile()) }
     var badges by remember { mutableStateOf(listOf<BadgeItem>()) }
@@ -97,34 +82,23 @@ fun ProfileScreen(
         val uid = user?.uid
         if (uri != null && uid != null) {
             subiendoFoto = true
-            subirFotoPerfil(
-                uid = uid,
-                imageUri = uri,
-                onSuccess = {
-                    subiendoFoto = false
-                    Toast.makeText(context, "Foto actualizada", Toast.LENGTH_SHORT).show()
-                },
-                onError = { error ->
-                    subiendoFoto = false
-                    Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
-                }
-            )
+            subirFotoPerfil(context, uid, uri, {
+                subiendoFoto = false
+                Toast.makeText(context, "Foto actualizada", Toast.LENGTH_SHORT).show()
+            }, { subiendoFoto = false })
         }
     }
 
     DisposableEffect(user?.uid) {
         val uid = user?.uid
-
         if (uid == null) {
             loading = false
             onDispose { }
         } else {
             loading = true
-
             val listeners = mutableListOf<ListenerRegistration>()
 
-            val perfilListener = db.collection("usuarios")
-                .document(uid)
+            val perfilListener = db.collection("usuarios").document(uid)
                 .addSnapshotListener { document, _ ->
                     if (document != null && document.exists()) {
                         val data = document.toObject<UserProfile>()
@@ -138,352 +112,171 @@ fun ProfileScreen(
                     loading = false
                 }
 
-            val logrosListener = db.collection("usuarios")
-                .document(uid)
-                .collection("logros")
+            val logrosListener = db.collection("usuarios").document(uid).collection("logros")
                 .addSnapshotListener { snapshot, _ ->
-                    badges = snapshot?.documents?.mapNotNull { doc ->
-                        doc.toObject<BadgeItem>()?.copy(id = doc.id)
-                    } ?: emptyList()
+                    badges = snapshot?.documents?.mapNotNull { it.toObject<BadgeItem>() } ?: emptyList()
                 }
 
-            val registrosListener = db.collection("usuarios")
-                .document(uid)
-                .collection("registros")
+            val registrosListener = db.collection("usuarios").document(uid).collection("registros")
                 .addSnapshotListener { snapshot, _ ->
-                    registros = snapshot?.documents?.mapNotNull { doc ->
-                        doc.toObject<RegistroItem>()?.copy(id = doc.id)
-                    } ?: emptyList()
+                    registros = snapshot?.documents?.mapNotNull { it.toObject<RegistroItem>() } ?: emptyList()
                 }
 
-            listeners.add(perfilListener)
-            listeners.add(logrosListener)
-            listeners.add(registrosListener)
-
-            onDispose {
-                listeners.forEach { it.remove() }
-            }
+            listeners.addAll(listOf(perfilListener, logrosListener, registrosListener))
+            onDispose { listeners.forEach { it.remove() } }
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(bg)
-            .statusBarsPadding()
-            .navigationBarsPadding()
-    ) {
-        if (loading) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
-            }
-
+    Scaffold(
+        bottomBar = {
             AppBottomBar(
                 selected = "profile",
                 onHomeClick = onHomeClick,
                 onMissionsClick = onMissionsClick,
                 onProfileClick = onProfileClick
             )
-            return@Column
         }
-
+    ) { innerPadding ->
         Column(
-            modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp)
+            modifier = Modifier.fillMaxSize().background(bgLight).padding(innerPadding)
         ) {
+            if (loading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = mainGreen)
+                }
+                return@Scaffold
+            }
+
+            // Header
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    text = "←",
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable { onBack() }
-                )
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Image(
-                        painter = painterResource(id = R.drawable.logo),
-                        contentDescription = "Logo",
-                        modifier = Modifier.size(42.dp)
-                    )
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Text(
-                        text = "CyclApp",
-                        color = Color.White,
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
+                IconButton(onClick = onBack) {
+                    Text("←", fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 }
-
-                Text(
-                    text = "☰",
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Text("Mi Perfil", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = textPrimary)
+                Spacer(modifier = Modifier.size(48.dp))
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(card, RoundedCornerShape(28.dp))
-                    .padding(20.dp)
+            Column(
+                modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)
             ) {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier.size(120.dp),
-                            contentAlignment = Alignment.Center
+                // Avatar Section
+                Box(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
+                    Box(contentAlignment = Alignment.BottomEnd) {
+                        if (profile.fotoUrl.isNotBlank()) {
+                            AsyncImage(
+                                model = profile.fotoUrl,
+                                contentDescription = null,
+                                modifier = Modifier.size(130.dp).clip(CircleShape).border(3.dp, mainGreen, CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Icon(Icons.Outlined.AccountCircle, null, modifier = Modifier.size(130.dp), tint = textSecondary)
+                        }
+                        if (subiendoFoto) CircularProgressIndicator(modifier = Modifier.align(Alignment.Center), color = mainGreen)
+                        IconButton(
+                            onClick = { photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                            modifier = Modifier.background(mainGreen, CircleShape).size(36.dp)
                         ) {
-                            if (profile.fotoUrl.isNotBlank()) {
-                                AsyncImage(
-                                    model = profile.fotoUrl,
-                                    contentDescription = "Foto de perfil",
-                                    modifier = Modifier
-                                        .size(120.dp)
-                                        .clip(CircleShape),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Outlined.AccountCircle,
-                                    contentDescription = "Perfil",
-                                    modifier = Modifier.size(120.dp),
-                                    tint = Color.Black
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(16.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            ProfileEditableRow(
-                                label = "Nombre",
-                                value = nombreEdit,
-                                onValueChange = { nombreEdit = it },
-                                onSave = {
-                                    val uid = user?.uid ?: return@ProfileEditableRow
-                                    db.collection("usuarios")
-                                        .document(uid)
-                                        .set(
-                                            mapOf("nombre" to nombreEdit.trim()),
-                                            SetOptions.merge()
-                                        )
-                                }
-                            )
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            ProfileEditableRow(
-                                label = "Apellido",
-                                value = apellidoEdit,
-                                onValueChange = { apellidoEdit = it },
-                                onSave = {
-                                    val uid = user?.uid ?: return@ProfileEditableRow
-                                    db.collection("usuarios")
-                                        .document(uid)
-                                        .set(
-                                            mapOf("apellido" to apellidoEdit.trim()),
-                                            SetOptions.merge()
-                                        )
-                                }
-                            )
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            ProfileEditableRow(
-                                label = "Fecha de nacimiento",
-                                value = fechaEdit,
-                                onValueChange = { fechaEdit = it },
-                                onSave = {
-                                    val uid = user?.uid ?: return@ProfileEditableRow
-                                    db.collection("usuarios")
-                                        .document(uid)
-                                        .set(
-                                            mapOf("fechaNacimiento" to fechaEdit.trim()),
-                                            SetOptions.merge()
-                                        )
-                                }
-                            )
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Button(
-                                    onClick = {
-                                        photoPickerLauncher.launch(
-                                            PickVisualMediaRequest(
-                                                ActivityResultContracts.PickVisualMedia.ImageOnly
-                                            )
-                                        )
-                                    },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color(0xFFB8CB6A)
-                                    ),
-                                    enabled = !subiendoFoto
-                                ) {
-                                    Text(
-                                        text = if (profile.fotoUrl.isBlank()) "Poner foto" else "Cambiar foto",
-                                        color = Color.White
-                                    )
-                                }
-
-                                Button(
-                                    onClick = {
-                                        val uid = user?.uid ?: return@Button
-                                        subiendoFoto = true
-                                        eliminarFotoPerfil(
-                                            uid = uid,
-                                            onSuccess = {
-                                                subiendoFoto = false
-                                                Toast.makeText(
-                                                    context,
-                                                    "Foto eliminada",
-                                                    Toast.LENGTH_SHORT
-                                                ).show()
-                                            },
-                                            onError = { error ->
-                                                subiendoFoto = false
-                                                Toast.makeText(
-                                                    context,
-                                                    error,
-                                                    Toast.LENGTH_SHORT
-                                                ).show()
-                                            }
-                                        )
-                                    },
-                                    enabled = profile.fotoUrl.isNotBlank() && !subiendoFoto,
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = Color.Gray
-                                    )
-                                ) {
-                                    Text(
-                                        text = "Eliminar",
-                                        color = Color.White
-                                    )
-                                }
-                            }
-
-                            if (subiendoFoto) {
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = "Subiendo foto...",
-                                    fontSize = 12.sp,
-                                    color = Color.Gray
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Text(
-                        text = "Correo: ${profile.correo}",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "Puntos: ${profile.puntos}  |  Nivel: ${profile.nivel}",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-
-                    Spacer(modifier = Modifier.height(20.dp))
-                    HorizontalDivider(thickness = 2.dp, color = Color.Black)
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color(0xFFE8E8E8), RoundedCornerShape(24.dp))
-                            .padding(18.dp)
-                    ) {
-                        Column {
-                            Text(
-                                text = "LOGROS",
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFF7A5A46)
-                            )
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            if (badges.isEmpty()) {
-                                Text("Aún no hay logros.")
-                            } else {
-                                badges.forEach { badge ->
-                                    Text(
-                                        text = if (badge.desbloqueado) {
-                                            "🏅 ${badge.titulo}"
-                                        } else {
-                                            "🔒 ${badge.titulo}"
-                                        },
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(18.dp))
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color(0xFFE8E8E8), RoundedCornerShape(24.dp))
-                            .padding(18.dp)
-                    ) {
-                        Column {
-                            Text(
-                                text = "TODOS LOS REGISTROS",
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFF7A5A46)
-                            )
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            if (registros.isEmpty()) {
-                                Text("Aún no hay registros.")
-                            } else {
-                                registros.forEach { reg ->
-                                    Text(
-                                        text = "${reg.tipoResiduo} ${reg.hora} ${reg.fecha}",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                }
-                            }
+                            Icon(Icons.Default.CameraAlt, null, tint = Color.White, modifier = Modifier.size(20.dp))
                         }
                     }
                 }
+
+                // Stats Card
+                Row(
+                    modifier = Modifier.fillMaxWidth().background(cardBg, RoundedCornerShape(16.dp)).padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("PUNTOS", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = textSecondary)
+                        Text("${profile.puntos}", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = mainGreen)
+                    }
+                    VerticalDivider(modifier = Modifier.height(40.dp), thickness = 1.dp, color = bgLight)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("NIVEL", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = textSecondary)
+                        Text(profile.nivel, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = textPrimary)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Logros Section
+                val unlockedCount = badges.count { it.desbloqueado }
+                SectionHeader(title = "MIS LOGROS ($unlockedCount / ${badges.size})")
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (badges.isEmpty()) {
+                        Text("No hay logros disponibles", color = Color.Gray, fontSize = 12.sp)
+                    } else {
+                        badges.take(4).forEach { badge ->
+                            LogroIcon(badge)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Info Personal
+                SectionHeader(title = "INFORMACIÓN PERSONAL")
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = cardBg),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        ProfileEditableRow("Nombre", nombreEdit, { nombreEdit = it }, {
+                            db.collection("usuarios").document(user?.uid ?: "").update("nombre", nombreEdit)
+                        })
+                        HorizontalDivider(Modifier.padding(vertical = 12.dp), color = bgLight)
+                        ProfileEditableRow("Apellido", apellidoEdit, { apellidoEdit = it }, {
+                            db.collection("usuarios").document(user?.uid ?: "").update("apellido", apellidoEdit)
+                        })
+                        HorizontalDivider(Modifier.padding(vertical = 12.dp), color = bgLight)
+                        ProfileEditableRow("Fecha de Nacimiento", fechaEdit, { fechaEdit = it }, {
+                            db.collection("usuarios").document(user?.uid ?: "").update("fechaNacimiento", fechaEdit)
+                        })
+                        HorizontalDivider(Modifier.padding(vertical = 12.dp), color = bgLight)
+                        Text("Correo Electrónico", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = textSecondary)
+                        Text(profile.correo, fontSize = 14.sp, color = textPrimary)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
             }
         }
+    }
+}
 
-        AppBottomBar(
-            selected = "profile",
-            onHomeClick = onHomeClick,
-            onMissionsClick = onMissionsClick,
-            onProfileClick = onProfileClick
-        )
+@Composable
+fun SectionHeader(title: String) {
+    Text(
+        text = title,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Bold,
+        color = Color(0xFF636E72),
+        modifier = Modifier.padding(bottom = 8.dp)
+    )
+}
+
+@Composable
+fun LogroIcon(badge: BadgeItem) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(70.dp)) {
+        Box(
+            modifier = Modifier
+                .size(60.dp)
+                .background(if (badge.desbloqueado) Color(0xFFFFF9C4) else Color(0xFFF1F2F6), CircleShape)
+                .border(2.dp, if (badge.desbloqueado) Color(0xFFFFD600) else Color.Transparent, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(if (badge.desbloqueado) "🏅" else "🔒", fontSize = 24.sp)
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(badge.titulo, fontSize = 10.sp, fontWeight = FontWeight.Medium, maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
 }

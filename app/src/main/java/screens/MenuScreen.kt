@@ -266,7 +266,8 @@ fun MenuScreen(
             selected = "home",
             onHomeClick = { },
             onMissionsClick = onMissionsClick,
-            onProfileClick = onProfileClick
+            onProfileClick = onProfileClick,
+            onMapClick = onMapClick
         )
     }
 }
