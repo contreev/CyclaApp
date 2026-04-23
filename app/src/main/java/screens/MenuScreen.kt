@@ -36,7 +36,8 @@ fun MenuScreen(
     onLogoutClick: () -> Unit,
     onProfileClick: () -> Unit,
     onMissionsClick: () -> Unit,
-    onNewsClick: () -> Unit
+    onNewsClick: () -> Unit,
+    onWasteClick: () -> Unit
 ) {
     val bgColor = Color(0xFFE9E9E9)
     val cardColor = Color(0xFFF8F8F8)
@@ -125,12 +126,18 @@ fun MenuScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(18.dp)
                 ) {
-                    CategoryCard(
-                        modifier = Modifier.weight(1f),
-                        title = "Residuos",
-                        imageRes = R.drawable.logo,
-                        arrowColor = accentBrown
-                    )
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onWasteClick() }
+                    ) {
+                        CategoryCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            title = "Residuos",
+                            imageRes = R.drawable.logo,
+                            arrowColor = accentBrown
+                        )
+                    }
 
                     CategoryCard(
                         modifier = Modifier.weight(1f),
