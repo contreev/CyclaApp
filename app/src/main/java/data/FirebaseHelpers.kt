@@ -155,8 +155,8 @@ fun agregarOEditarResena(puntoId: String, uid: String, resena: Review, onSuccess
 }
 
 fun subirFotoPerfil(context: Context, uid: String, imageUri: Uri, onSuccess: () -> Unit, onError: (String) -> Unit) {
-    val cloudName = "dhcsw9o8y"
-    val uploadPreset = "cyclapp_prese"
+    val cloudName = "dquyy4n25"
+    val uploadPreset = "cyclapp_preset"
 
     CoroutineScope(Dispatchers.IO).launch {
         try {
@@ -164,9 +164,15 @@ fun subirFotoPerfil(context: Context, uid: String, imageUri: Uri, onSuccess: () 
             val bytes = inputStream?.readBytes() ?: throw Exception("No se pudo leer la imagen")
             
             val client = OkHttpClient()
+            val mimeType = context.contentResolver.getType(imageUri) ?: "image/jpeg"
+
             val requestBody = MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
-                .addFormDataPart("file", "profile.jpg", bytes.toRequestBody("image/jpeg".toMediaTypeOrNull()))
+                .addFormDataPart(
+                    "file",
+                    "profile",
+                    bytes.toRequestBody(mimeType.toMediaTypeOrNull())
+                )
                 .addFormDataPart("upload_preset", uploadPreset)
                 .build()
 

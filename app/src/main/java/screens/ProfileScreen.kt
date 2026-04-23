@@ -82,10 +82,19 @@ fun ProfileScreen(
         val uid = user?.uid
         if (uri != null && uid != null) {
             subiendoFoto = true
-            subirFotoPerfil(context, uid, uri, {
-                subiendoFoto = false
-                Toast.makeText(context, "Foto actualizada", Toast.LENGTH_SHORT).show()
-            }, { subiendoFoto = false })
+            subirFotoPerfil(
+                context,
+                uid,
+                uri,
+                {
+                    subiendoFoto = false
+                    Toast.makeText(context, "Foto actualizada", Toast.LENGTH_SHORT).show()
+                },
+                { error ->
+                    subiendoFoto = false
+                    Toast.makeText(context, error, Toast.LENGTH_LONG).show()
+                }
+            )
         }
     }
 
