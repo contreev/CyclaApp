@@ -71,21 +71,24 @@ fun CyclAppApp() {
         "map" -> MapScreen(
             onBackClick = { screen = "menu" },
             onMissionsClick = { screen = "missions" },
-            onProfileClick = { screen = "profile" }
+            onProfileClick = { screen = "profile" },
+            onHomeClick = { screen = "menu" }
         )
 
         "profile" -> ProfileScreen(
             onBack = { screen = "menu" },
             onHomeClick = { screen = "menu" },
             onMissionsClick = { screen = "missions" },
-            onProfileClick = { screen = "profile" }
+            onProfileClick = { screen = "profile" },
+            onMapClick = { screen = "map" }
         )
 
         "missions" -> MissionsScreen(
             onBack = { screen = "menu" },
             onHomeClick = { screen = "menu" },
             onMissionsClick = { screen = "missions" },
-            onProfileClick = { screen = "profile" }
+            onProfileClick = { screen = "profile" },
+            onMapClick = { screen = "map" }
         )
     }
 }

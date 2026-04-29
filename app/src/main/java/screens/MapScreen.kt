@@ -52,6 +52,7 @@ fun MapScreen(
     onBackClick: () -> Unit,
     onMissionsClick: () -> Unit,
     onProfileClick: () -> Unit,
+    onHomeClick: () -> Unit,
     mapViewModel: MapViewModel = viewModel()
 ) {
     val context = LocalContext.current
@@ -197,9 +198,10 @@ fun MapScreen(
         Box(modifier = Modifier.align(Alignment.BottomCenter)) {
             AppBottomBar(
                 selected = "map",
-                onHomeClick = onBackClick,
+                onHomeClick = onHomeClick,
                 onMissionsClick = onMissionsClick,
-                onProfileClick = onProfileClick
+                onProfileClick = onProfileClick,
+                onMapClick = { /* Ya estamos en el mapa, opcionalmente centrarlo */ }
             )
         }
 

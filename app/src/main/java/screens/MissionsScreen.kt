@@ -39,7 +39,8 @@ fun MissionsScreen(
     onBack: () -> Unit,
     onHomeClick: () -> Unit,
     onMissionsClick: () -> Unit,
-    onProfileClick: () -> Unit
+    onProfileClick: () -> Unit,
+    onMapClick: () -> Unit
 ) {
     val auth = FirebaseAuth.getInstance()
     val db = Firebase.firestore
@@ -104,7 +105,8 @@ fun MissionsScreen(
                 selected = "missions",
                 onHomeClick = onHomeClick,
                 onMissionsClick = onMissionsClick,
-                onProfileClick = onProfileClick
+                onProfileClick = onProfileClick,
+                onMapClick = onMapClick
             )
         }
     ) { paddingValues ->
