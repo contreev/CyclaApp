@@ -255,12 +255,33 @@ fun PointDetailOverlay(point: RecyclingPoint, onDismiss: () -> Unit, onSendRevie
                 .background(Color.White)
                 .clickable(enabled = false) {}
                 .padding(horizontal = 24.dp)
-                .padding(top = 24.dp)
+                .padding(top = 16.dp)
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Box(modifier = Modifier.width(40.dp).height(4.dp).background(Color.LightGray, CircleShape))
-            Spacer(modifier = Modifier.height(20.dp))
+            // Header con botón de retroceso y barra de arrastre
+            Box(modifier = Modifier.fillMaxWidth()) {
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.align(Alignment.TopStart)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Cerrar detalles",
+                        tint = Color.Black
+                    )
+                }
+                
+                Box(
+                    modifier = Modifier
+                        .width(40.dp)
+                        .height(4.dp)
+                        .background(Color.LightGray, CircleShape)
+                        .align(Alignment.Center)
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
             
             Text(text = point.name, fontSize = 24.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
             Spacer(modifier = Modifier.height(8.dp))
