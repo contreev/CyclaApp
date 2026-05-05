@@ -42,6 +42,7 @@ import android.graphics.BitmapFactory
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import java.io.File
+import androidx.compose.ui.graphics.asImageBitmap
 
 @Composable
 fun CameraScreen(
@@ -98,6 +99,17 @@ fun CameraScreen(
                 .background(Color.White)
         ) {
             if (hasCameraPermission) {
+                if (capturedImagePath != null) {
+                    CapturedImagePreview(
+                        imagePath = capturedImagePath!!,
+                        onRetake = {
+                            capturedImagePath = null
+                        },
+                        onAnalyze = {
+                            Log.d("CameraScreen", "Imagen lista para analizar: $capturedImagePath")
+                        }
+                    )
+                } else {
                 // Vista de Cámara
                 AndroidView(
                     factory = { ctx ->
@@ -112,6 +124,8 @@ fun CameraScreen(
                             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
                             try {
+                                cameraProvider.unbindAll()
+
                                 cameraProvider.bindToLifecycle(
                                     lifecycleOwner,
                                     cameraSelector,
@@ -229,13 +243,17 @@ fun CameraScreen(
                                     "residuo_${System.currentTimeMillis()}.jpg"
                                 )
 
-                                val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
+                                val outputOptions = ImageCapture.OutputFileOptions
+                                    .Builder(photoFile)
+                                    .build()
 
                                 imageCapture.takePicture(
                                     outputOptions,
                                     ContextCompat.getMainExecutor(context),
                                     object : ImageCapture.OnImageSavedCallback {
-                                        override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                                        override fun onImageSaved(
+                                            outputFileResults: ImageCapture.OutputFileResults
+                                        ) {
                                             capturedImagePath = photoFile.absolutePath
                                         }
 
@@ -256,21 +274,29 @@ fun CameraScreen(
                         modifier = Modifier.size(50.dp)
                     ) {
                         Icon(
-                            Icons.Outlined.FlashOn, 
-                            contentDescription = "Flash", 
+                            imageVector = Icons.Outlined.FlashOn,
+                            contentDescription = "Flash",
                             tint = Color.Gray,
                             modifier = Modifier.size(32.dp)
                         )
                     }
                 }
+                }
 
             } else {
                 // Mensaje si no hay permiso
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("Se requiere permiso de cámara para esta función")
+
                         Spacer(modifier = Modifier.height(16.dp))
-                        Button(onClick = { launcher.launch(Manifest.permission.CAMERA) }) {
+
+                        Button(
+                            onClick = { launcher.launch(Manifest.permission.CAMERA) }
+                        ) {
                             Text("Habilitar Cámara")
                         }
                     }
@@ -279,3 +305,67 @@ fun CameraScreen(
         }
     }
 }
+    @Composable
+    fun CapturedImagePreview(
+        imagePath: String,
+        onRetake: () -> Unit,
+        onAnalyze: () -> Unit
+    ) {
+        val bitmap = remember(imagePath) {
+            BitmapFactory.decodeFile(imagePath)
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFFF8F9FA))
+                .padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Foto capturada",
+                fontWeight = FontWeight.Bold,
+                fontSize = 22.sp
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            if (bitmap != null) {
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = "Foto del residuo",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(430.dp)
+                        .clip(RoundedCornerShape(24.dp)),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Text("No se pudo cargar la imagen")
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Button(
+                onClick = onAnalyze,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFB8CB6A),
+                    contentColor = Color.Black
+                )
+            ) {
+                Text("Analizar residuo")
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedButton(
+                onClick = onRetake,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp)
+            ) {
+                Text("Repetir foto")
+            }
+        }
+    }
