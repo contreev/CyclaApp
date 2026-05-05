@@ -41,7 +41,8 @@ fun MenuScreen(
     onMissionsClick: () -> Unit,
     onNewsClick: () -> Unit,
     onWasteClick: () -> Unit,
-    onMapClick: () -> Unit
+    onMapClick: () -> Unit,
+    onCameraClick: () -> Unit
 ) {
     val bgColor = Color(0xFFE9E9E9)
     val cardColor = Color(0xFFF8F8F8)
@@ -267,7 +268,8 @@ fun MenuScreen(
             onHomeClick = { },
             onMissionsClick = onMissionsClick,
             onProfileClick = onProfileClick,
-            onMapClick = onMapClick
+            onMapClick = onMapClick,
+            onCameraClick = onCameraClick
         )
     }
 }

@@ -53,6 +53,7 @@ fun MapScreen(
     onMissionsClick: () -> Unit,
     onProfileClick: () -> Unit,
     onHomeClick: () -> Unit,
+    onCameraClick: () -> Unit,
     mapViewModel: MapViewModel = viewModel()
 ) {
     val context = LocalContext.current
@@ -201,7 +202,8 @@ fun MapScreen(
                 onHomeClick = onHomeClick,
                 onMissionsClick = onMissionsClick,
                 onProfileClick = onProfileClick,
-                onMapClick = { /* Ya estamos en el mapa, opcionalmente centrarlo */ }
+                onMapClick = { /* Ya estamos en el mapa, opcionalmente centrarlo */ },
+                onCameraClick = onCameraClick
             )
         }
 

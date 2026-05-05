@@ -12,6 +12,7 @@ import com.example.cyclapp.screens.ProfileScreen
 import com.example.cyclapp.screens.WelcomeScreen
 import com.example.cyclapp.screens.WasteScreen
 import com.example.cyclapp.screens.MapScreen
+import com.example.cyclapp.screens.CameraScreen
 import com.google.firebase.auth.FirebaseAuth
 
 @Composable
@@ -57,7 +58,8 @@ fun CyclAppApp() {
             onMissionsClick = { screen = "missions" },
             onNewsClick = { screen = "news" },
             onWasteClick = { screen = "waste" },
-            onMapClick = { screen = "map" }
+            onMapClick = { screen = "map" },
+            onCameraClick = { screen = "camera" }
         )
 
         "news" -> NewsScreen(
@@ -72,7 +74,8 @@ fun CyclAppApp() {
             onBackClick = { screen = "menu" },
             onMissionsClick = { screen = "missions" },
             onProfileClick = { screen = "profile" },
-            onHomeClick = { screen = "menu" }
+            onHomeClick = { screen = "menu" },
+            onCameraClick = { screen = "camera" }
         )
 
         "profile" -> ProfileScreen(
@@ -80,11 +83,21 @@ fun CyclAppApp() {
             onHomeClick = { screen = "menu" },
             onMissionsClick = { screen = "missions" },
             onProfileClick = { screen = "profile" },
-            onMapClick = { screen = "map" }
+            onMapClick = { screen = "map" },
+            onCameraClick = { screen = "camera" }
         )
 
         "missions" -> MissionsScreen(
             onBack = { screen = "menu" },
+            onHomeClick = { screen = "menu" },
+            onMissionsClick = { screen = "missions" },
+            onProfileClick = { screen = "profile" },
+            onMapClick = { screen = "map" },
+            onCameraClick = { screen = "camera" }
+        )
+
+        "camera" -> CameraScreen(
+            onBackClick = { screen = "menu" },
             onHomeClick = { screen = "menu" },
             onMissionsClick = { screen = "missions" },
             onProfileClick = { screen = "profile" },

@@ -52,7 +52,8 @@ fun ProfileScreen(
     onHomeClick: () -> Unit,
     onMissionsClick: () -> Unit,
     onProfileClick: () -> Unit,
-    onMapClick: () -> Unit
+    onMapClick: () -> Unit,
+    onCameraClick: () -> Unit
 ) {
     val auth = FirebaseAuth.getInstance()
     val db = Firebase.firestore
@@ -144,7 +145,8 @@ fun ProfileScreen(
                 onHomeClick = onHomeClick,
                 onMissionsClick = onMissionsClick,
                 onProfileClick = onProfileClick,
-                onMapClick = onMapClick
+                onMapClick = onMapClick,
+                onCameraClick = onCameraClick
             )
         }
     ) { innerPadding ->
