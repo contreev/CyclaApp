@@ -38,6 +38,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.example.cyclapp.R
 import com.example.cyclapp.components.AppBottomBar
+import android.graphics.BitmapFactory
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import java.io.File
 
 @Composable
 fun CameraScreen(
@@ -50,6 +54,8 @@ fun CameraScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
+    val imageCapture = remember { ImageCapture.Builder().build() }
+    var capturedImagePath by remember { mutableStateOf<String?>(null) }
 
     var hasCameraPermission by remember {
         mutableStateOf(
@@ -106,11 +112,11 @@ fun CameraScreen(
                             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
                             try {
-                                cameraProvider.unbindAll()
                                 cameraProvider.bindToLifecycle(
                                     lifecycleOwner,
                                     cameraSelector,
-                                    preview
+                                    preview,
+                                    imageCapture
                                 )
                             } catch (e: Exception) {
                                 Log.e("CameraScreen", "Use case binding failed", e)
@@ -217,7 +223,28 @@ fun CameraScreen(
                     Surface(
                         modifier = Modifier
                             .size(70.dp)
-                            .clickable { /* Capturar */ },
+                            .clickable {
+                                val photoFile = File(
+                                    context.cacheDir,
+                                    "residuo_${System.currentTimeMillis()}.jpg"
+                                )
+
+                                val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
+
+                                imageCapture.takePicture(
+                                    outputOptions,
+                                    ContextCompat.getMainExecutor(context),
+                                    object : ImageCapture.OnImageSavedCallback {
+                                        override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                                            capturedImagePath = photoFile.absolutePath
+                                        }
+
+                                        override fun onError(exception: ImageCaptureException) {
+                                            Log.e("CameraScreen", "Error capturando imagen", exception)
+                                        }
+                                    }
+                                )
+                            },
                         shape = CircleShape,
                         color = Color.White,
                         border = BorderStroke(4.dp, Color.LightGray)
