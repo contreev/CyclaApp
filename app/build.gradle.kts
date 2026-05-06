@@ -41,6 +41,10 @@ android {
     buildFeatures {
         compose = true
     }
+
+    aaptOptions {
+        noCompress("tflite")
+    }
 }
 
 dependencies {
@@ -87,6 +91,11 @@ dependencies {
     
     // Fix for: Cannot access class 'ListenableFuture'.
     implementation("com.google.guava:guava:33.3.1-android")
+
+    // TensorFlow Lite
+    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+    implementation("org.tensorflow:tensorflow-lite-metadata:0.4.4")
+    implementation("org.tensorflow:tensorflow-lite-gpu:2.16.1")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

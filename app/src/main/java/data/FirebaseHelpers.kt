@@ -34,16 +34,16 @@ fun crearDatosInicialesUsuario(uid: String) {
     val logrosRef = userRef.collection("logros")
     
     val misionesOficiales = listOf(
-        MissionItem("m1", "Recicla 3 botellas", "Deposita 3 botellas plásticas.", 3, 30),
-        MissionItem("m2", "Primer registro", "Realiza tu primer registro de reciclaje.", 1, 20),
-        MissionItem("m3", "Visita un punto verde", "Consulta un punto cercano.", 1, 15),
-        MissionItem("m4", "Eco-Explorador", "Visita 3 puntos diferentes.", 3, 100),
-        MissionItem("m5", "Crítico Verde", "Deja 5 reseñas.", 5, 150),
-        MissionItem("m6", "Rey del Plástico", "Registra 10 botellas.", 10, 200),
-        MissionItem("m7", "Cero Papel", "Recicla 5 kg de papel.", 5, 120),
-        MissionItem("m8", "Vidrio Brillante", "Lleva 8 botellas de vidrio.", 8, 180),
-        MissionItem("m9", "Pilas Fuera", "Recicla 2 pilas.", 2, 250),
-        MissionItem("m10", "Reciclador Constante", "Registro por 3 días.", 3, 400)
+        MissionItem("m1", "Recicla 3 botellas", "Deposita 3 botellas plásticas.", 0, 3, 30),
+        MissionItem("m2", "Primer registro", "Realiza tu primer registro de reciclaje.", 0, 1, 20),
+        MissionItem("m3", "Visita un punto verde", "Consulta un punto cercano.", 0, 1, 15),
+        MissionItem("m4", "Eco-Explorador", "Visita 3 puntos diferentes.", 0, 3, 100),
+        MissionItem("m5", "Crítico Verde", "Deja 5 reseñas.", 0, 5, 150),
+        MissionItem("m6", "Rey del Plástico", "Registra 10 botellas.", 0, 10, 200),
+        MissionItem("m7", "Cero Papel", "Recicla 5 kg de papel.", 0, 5, 120),
+        MissionItem("m8", "Vidrio Brillante", "Lleva 8 botellas de vidrio.", 0, 8, 180),
+        MissionItem("m9", "Pilas Fuera", "Recicla 2 pilas.", 0, 2, 250),
+        MissionItem("m10", "Reciclador Constante", "Registro por 3 días.", 0, 3, 400)
     )
 
     val logrosOficiales = listOf(
@@ -126,6 +126,42 @@ fun completarPasoMision(uid: String, mission: MissionItem) {
         }
         null
     }.addOnSuccessListener { if (seCompleto) sincronizarPuntosYLogros(uid) }
+}
+
+/**
+ * Actualiza el progreso de misiones basado en el tipo de residuo detectado.
+ */
+fun registrarResiduoDetectado(uid: String, label: String) {
+    val db = Firebase.firestore
+    val misionesRef = db.collection("usuarios").document(uid).collection("misiones")
+    
+    // Mapeo de labels del modelo a IDs de misiones
+    val missionIds = when (label.lowercase()) {
+        "plastico", "plastic" -> listOf("m1", "m6")
+        "papel", "paper" -> listOf("m7")
+        "vidrio", "glass" -> listOf("m8")
+        "pilas", "batteries" -> listOf("m9")
+        else -> emptyList()
+    }
+    
+    if (missionIds.isEmpty()) return
+
+    missionIds.forEach { id ->
+        misionesRef.document(id).get().addOnSuccessListener { doc ->
+            val mission = doc.toObject<MissionItem>()?.copy(id = doc.id)
+            if (mission != null) {
+                completarPasoMision(uid, mission)
+            }
+        }
+    }
+    
+    // También completar "Primer registro" si no está hecho
+    misionesRef.document("m2").get().addOnSuccessListener { doc ->
+        val mission = doc.toObject<MissionItem>()?.copy(id = doc.id)
+        if (mission != null && !mission.completada) {
+            completarPasoMision(uid, mission)
+        }
+    }
 }
 
 fun getPuntosReciclaje(onUpdate: (List<RecyclingPoint>) -> Unit) {
