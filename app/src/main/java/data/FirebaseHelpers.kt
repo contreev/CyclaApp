@@ -25,7 +25,35 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
 /**
- * Sistema de 8 Logros Innovadores con limpieza profunda.
+ * Listado oficial de misiones para sincronización y creación dinámica.
+ */
+val misionesOficiales = listOf(
+    MissionItem("m1", "Recicla 3 botellas", "Deposita 3 botellas plásticas.", 0, 3, 30),
+    MissionItem("m2", "Primer registro", "Realiza tu primer registro de reciclaje.", 0, 1, 20),
+    MissionItem("m3", "Visita un punto verde", "Consulta un punto cercano.", 0, 1, 15),
+    MissionItem("m4", "Eco-Explorador", "Visita 3 puntos diferentes.", 0, 3, 100),
+    MissionItem("m5", "Crítico Verde", "Deja 5 reseñas.", 0, 5, 150),
+    MissionItem("m6", "Rey del Plástico", "Registra 10 botellas.", 0, 10, 200),
+    MissionItem("m7", "Cero Papel", "Recicla 5 unidades de papel o cartón.", 0, 5, 120),
+    MissionItem("m8", "Vidrio Brillante", "Lleva 8 botellas de vidrio.", 0, 8, 180),
+    MissionItem("m9", "Pilas Fuera", "Recicla 2 pilas.", 0, 2, 250),
+    MissionItem("m10", "Reciclador Constante", "Registro por 3 días.", 0, 3, 400),
+    MissionItem("m11", "Maestro del Papel", "Recicla 100 unidades de papel (servilletas, hojas, etc).", 0, 100, 500)
+)
+
+val logrosOficiales = listOf(
+    BadgeItem("e1", "🌱 Semilla", "1 misión completada.", false),
+    BadgeItem("e2", "🌿 Brote", "4 misiones completadas.", false),
+    BadgeItem("e3", "🌳 Árbol", "7 misiones completadas.", false),
+    BadgeItem("e4", "✨ Espíritu de la Naturaleza", "10 misiones completadas.", false),
+    BadgeItem("s1", "🧪 Alquimista del Plástico", "Completaste m1 y m6.", false),
+    BadgeItem("s2", "🎒 Eco-Viajero", "Completaste m4.", false),
+    BadgeItem("s3", "📢 Voz Ecológica", "Completaste m5.", false),
+    BadgeItem("s4", "💎 Maestro del Vidrio", "Completaste m8.", false)
+)
+
+/**
+ * Inicializa los datos del usuario con misiones y logros.
  */
 fun crearDatosInicialesUsuario(uid: String) {
     val db = Firebase.firestore
@@ -33,30 +61,6 @@ fun crearDatosInicialesUsuario(uid: String) {
     val misionesRef = userRef.collection("misiones")
     val logrosRef = userRef.collection("logros")
     
-    val misionesOficiales = listOf(
-        MissionItem("m1", "Recicla 3 botellas", "Deposita 3 botellas plásticas.", 0, 3, 30),
-        MissionItem("m2", "Primer registro", "Realiza tu primer registro de reciclaje.", 0, 1, 20),
-        MissionItem("m3", "Visita un punto verde", "Consulta un punto cercano.", 0, 1, 15),
-        MissionItem("m4", "Eco-Explorador", "Visita 3 puntos diferentes.", 0, 3, 100),
-        MissionItem("m5", "Crítico Verde", "Deja 5 reseñas.", 0, 5, 150),
-        MissionItem("m6", "Rey del Plástico", "Registra 10 botellas.", 0, 10, 200),
-        MissionItem("m7", "Cero Papel", "Recicla 5 kg de papel.", 0, 5, 120),
-        MissionItem("m8", "Vidrio Brillante", "Lleva 8 botellas de vidrio.", 0, 8, 180),
-        MissionItem("m9", "Pilas Fuera", "Recicla 2 pilas.", 0, 2, 250),
-        MissionItem("m10", "Reciclador Constante", "Registro por 3 días.", 0, 3, 400)
-    )
-
-    val logrosOficiales = listOf(
-        BadgeItem("e1", "🌱 Semilla", "1 misión completada.", false),
-        BadgeItem("e2", "🌿 Brote", "4 misiones completadas.", false),
-        BadgeItem("e3", "🌳 Árbol", "7 misiones completadas.", false),
-        BadgeItem("e4", "✨ Espíritu de la Naturaleza", "10 misiones completadas.", false),
-        BadgeItem("s1", "🧪 Alquimista del Plástico", "Completaste m1 y m6.", false),
-        BadgeItem("s2", "🎒 Eco-Viajero", "Completaste m4.", false),
-        BadgeItem("s3", "📢 Voz Ecológica", "Completaste m5.", false),
-        BadgeItem("s4", "💎 Maestro del Vidrio", "Completaste m8.", false)
-    )
-
     logrosRef.get().addOnSuccessListener { snapshot ->
         val batch = db.batch()
         snapshot.documents.forEach { batch.delete(it.reference) }
@@ -130,36 +134,64 @@ fun completarPasoMision(uid: String, mission: MissionItem) {
 
 /**
  * Actualiza el progreso de misiones basado en el tipo de residuo detectado.
+ * Si la misión no existe (por ejemplo, para papel), la crea dinámicamente.
  */
 fun registrarResiduoDetectado(uid: String, label: String) {
     val db = Firebase.firestore
     val misionesRef = db.collection("usuarios").document(uid).collection("misiones")
     
-    // Mapeo de labels del modelo a IDs de misiones
-    val missionIds = when (label.lowercase()) {
-        "plastico", "plastic" -> listOf("m1", "m6")
-        "papel", "paper" -> listOf("m7")
-        "vidrio", "glass" -> listOf("m8")
-        "pilas", "batteries" -> listOf("m9")
-        else -> emptyList()
-    }
+    val cleanLabel = label.lowercase().trim()
+    val targetIds = mutableListOf<String>()
     
-    if (missionIds.isEmpty()) return
-
-    missionIds.forEach { id ->
-        misionesRef.document(id).get().addOnSuccessListener { doc ->
-            val mission = doc.toObject<MissionItem>()?.copy(id = doc.id)
-            if (mission != null) {
-                completarPasoMision(uid, mission)
+    // Mapeo flexible de labels a misiones
+    when {
+        cleanLabel.contains("plastic") || cleanLabel.contains("plastico") -> targetIds.addAll(listOf("m1", "m6"))
+        cleanLabel.contains("paper") || cleanLabel.contains("papel") || cleanLabel.contains("carton") || cleanLabel.contains("servilleta") -> {
+            targetIds.add("m7")
+            targetIds.add("m11") // Nueva misión de 100 papeles
+        }
+        cleanLabel.contains("glass") || cleanLabel.contains("vidrio") -> targetIds.add("m8")
+        cleanLabel.contains("battery") || cleanLabel.contains("pila") -> targetIds.add("m9")
+        else -> {
+            // Si es un residuo nuevo (ej: metal), creamos un ID de misión dinámico
+            if (cleanLabel.isNotEmpty() && cleanLabel != "background") {
+                targetIds.add("m_custom_$cleanLabel")
             }
         }
     }
     
-    // También completar "Primer registro" si no está hecho
-    misionesRef.document("m2").get().addOnSuccessListener { doc ->
-        val mission = doc.toObject<MissionItem>()?.copy(id = doc.id)
-        if (mission != null && !mission.completada) {
-            completarPasoMision(uid, mission)
+    // Siempre avanzar la misión de "Primer registro" si no está completa
+    if (!targetIds.contains("m2")) targetIds.add("m2")
+
+    targetIds.forEach { id ->
+        misionesRef.document(id).get().addOnSuccessListener { doc ->
+            if (doc.exists()) {
+                val mission = doc.toObject<MissionItem>()?.copy(id = doc.id)
+                if (mission != null) completarPasoMision(uid, mission)
+            } else {
+                // Si la misión no existe para este usuario, la creamos
+                val oficial = misionesOficiales.find { it.id == id }
+                if (oficial != null) {
+                    misionesRef.document(id).set(oficial).addOnSuccessListener {
+                        completarPasoMision(uid, oficial)
+                    }
+                } else if (id.startsWith("m_custom_")) {
+                    // Misión dinámica para nuevos tipos de residuos con el diseño estándar
+                    val labelCapitalized = cleanLabel.replaceFirstChar { it.uppercase() }
+                    val nuevaMision = MissionItem(
+                        id = id,
+                        titulo = "Reto $labelCapitalized",
+                        descripcion = "Has descubierto un nuevo residuo: $cleanLabel. ¡Recicla 5 unidades!",
+                        progreso = 0,
+                        meta = 5,
+                        recompensa = 50,
+                        completada = false
+                    )
+                    misionesRef.document(id).set(nuevaMision).addOnSuccessListener {
+                        completarPasoMision(uid, nuevaMision)
+                    }
+                }
+            }
         }
     }
 }
