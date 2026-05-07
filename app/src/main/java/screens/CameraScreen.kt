@@ -13,6 +13,7 @@ import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -45,7 +46,9 @@ import com.example.cyclapp.R
 import com.example.cyclapp.components.AppBottomBar
 import com.example.cyclapp.data.WasteClassifier
 import com.example.cyclapp.data.registrarResiduoDetectado
+import com.example.cyclapp.model.MissionItem
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.delay
 import java.io.File
 
 @Composable
@@ -67,6 +70,17 @@ fun CameraScreen(
     var capturedImagePath by remember { mutableStateOf<String?>(null) }
     var classificationResult by remember { mutableStateOf<String?>(null) }
     var isAnalyzing by remember { mutableStateOf(false) }
+
+    // Estado para la notificación de misión
+    var missionNotification by remember { mutableStateOf<Pair<MissionItem, Boolean>?>(null) }
+
+    // Ocultar notificación después de 3 segundos
+    LaunchedEffect(missionNotification) {
+        if (missionNotification != null) {
+            delay(3500)
+            missionNotification = null
+        }
+    }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -137,8 +151,9 @@ fun CameraScreen(
                                     if (topResult.score > 0.7f) {
                                         val uid = auth.currentUser?.uid
                                         if (uid != null) {
-                                            registrarResiduoDetectado(uid, topResult.label)
-                                            Toast.makeText(context, "¡Misiones actualizadas: ${topResult.label}!", Toast.LENGTH_LONG).show()
+                                            registrarResiduoDetectado(uid, topResult.label) { mission, completed ->
+                                                missionNotification = mission to completed
+                                            }
                                         }
                                     }
                                 } else {
@@ -331,6 +346,74 @@ fun CameraScreen(
                             onClick = { launcher.launch(Manifest.permission.CAMERA) }
                         ) {
                             Text("Habilitar Cámara")
+                        }
+                    }
+                }
+            }
+
+            // Notificación Flotante de Misión
+            AnimatedVisibility(
+                visible = missionNotification != null,
+                enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 80.dp)
+            ) {
+                missionNotification?.let { (mission, completed) ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth(0.9f)
+                            .padding(8.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = if (completed) Color(0xFFE8F5E9) else Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .background(if (completed) Color(0xFF4CAF50) else Color(0xFFB8CB6A), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (completed) Icons.Default.Check else Icons.Default.Star,
+                                    contentDescription = null,
+                                    tint = Color.White
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column {
+                                Text(
+                                    text = if (completed) "¡MISIÓN COMPLETADA!" else "¡PROGRESO DE MISIÓN!",
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 12.sp,
+                                    color = if (completed) Color(0xFF2E7D32) else Color(0xFFB8CB6A)
+                                )
+                                Text(
+                                    text = mission.titulo,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp
+                                )
+                                LinearProgressIndicator(
+                                    progress = { mission.progreso.toFloat() / mission.meta.toFloat() },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 4.dp)
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp)),
+                                    color = Color(0xFFB8CB6A),
+                                    trackColor = Color.LightGray.copy(alpha = 0.3f)
+                                )
+                                Text(
+                                    text = "${mission.progreso}/${mission.meta}",
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.align(Alignment.End)
+                                )
+                            }
                         }
                     }
                 }

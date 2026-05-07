@@ -114,13 +114,18 @@ fun sincronizarPuntosYLogros(uid: String) {
     }
 }
 
-fun completarPasoMision(uid: String, mission: MissionItem) {
+fun completarPasoMision(
+    uid: String,
+    mission: MissionItem,
+    onSuccess: (MissionItem, Boolean) -> Unit = { _, _ -> }
+) {
     val db = Firebase.firestore
     val missionRef = db.collection("usuarios").document(uid).collection("misiones").document(mission.id)
     if (mission.completada) return
 
     val nuevoProgreso = mission.progreso + 1
     val seCompleto = nuevoProgreso >= mission.meta
+    val updatedMission = mission.copy(progreso = nuevoProgreso.coerceAtMost(mission.meta), completada = seCompleto)
 
     db.runTransaction { transaction ->
         if (seCompleto) {
@@ -129,14 +134,21 @@ fun completarPasoMision(uid: String, mission: MissionItem) {
             transaction.update(missionRef, "progreso", nuevoProgreso)
         }
         null
-    }.addOnSuccessListener { if (seCompleto) sincronizarPuntosYLogros(uid) }
+    }.addOnSuccessListener {
+        if (seCompleto) sincronizarPuntosYLogros(uid)
+        onSuccess(updatedMission, seCompleto)
+    }
 }
 
 /**
  * Actualiza el progreso de misiones basado en el tipo de residuo detectado.
  * Si la misión no existe (por ejemplo, para papel), la crea dinámicamente.
  */
-fun registrarResiduoDetectado(uid: String, label: String) {
+fun registrarResiduoDetectado(
+    uid: String,
+    label: String,
+    onMissionAdvanced: (MissionItem, Boolean) -> Unit = { _, _ -> }
+) {
     val db = Firebase.firestore
     val misionesRef = db.collection("usuarios").document(uid).collection("misiones")
     
@@ -167,13 +179,13 @@ fun registrarResiduoDetectado(uid: String, label: String) {
         misionesRef.document(id).get().addOnSuccessListener { doc ->
             if (doc.exists()) {
                 val mission = doc.toObject<MissionItem>()?.copy(id = doc.id)
-                if (mission != null) completarPasoMision(uid, mission)
+                if (mission != null) completarPasoMision(uid, mission, onMissionAdvanced)
             } else {
                 // Si la misión no existe para este usuario, la creamos
                 val oficial = misionesOficiales.find { it.id == id }
                 if (oficial != null) {
                     misionesRef.document(id).set(oficial).addOnSuccessListener {
-                        completarPasoMision(uid, oficial)
+                        completarPasoMision(uid, oficial, onMissionAdvanced)
                     }
                 } else if (id.startsWith("m_custom_")) {
                     // Misión dinámica para nuevos tipos de residuos con el diseño estándar
@@ -188,7 +200,7 @@ fun registrarResiduoDetectado(uid: String, label: String) {
                         completada = false
                     )
                     misionesRef.document(id).set(nuevaMision).addOnSuccessListener {
-                        completarPasoMision(uid, nuevaMision)
+                        completarPasoMision(uid, nuevaMision, onMissionAdvanced)
                     }
                 }
             }
