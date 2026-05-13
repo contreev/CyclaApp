@@ -114,18 +114,13 @@ fun sincronizarPuntosYLogros(uid: String) {
     }
 }
 
-fun completarPasoMision(
-    uid: String,
-    mission: MissionItem,
-    onSuccess: (MissionItem, Boolean) -> Unit = { _, _ -> }
-) {
+fun completarPasoMision(uid: String, mission: MissionItem, onResult: ((MissionItem, Boolean) -> Unit)? = null) {
     val db = Firebase.firestore
     val missionRef = db.collection("usuarios").document(uid).collection("misiones").document(mission.id)
     if (mission.completada) return
 
     val nuevoProgreso = mission.progreso + 1
     val seCompleto = nuevoProgreso >= mission.meta
-    val updatedMission = mission.copy(progreso = nuevoProgreso.coerceAtMost(mission.meta), completada = seCompleto)
 
     db.runTransaction { transaction ->
         if (seCompleto) {
@@ -134,21 +129,17 @@ fun completarPasoMision(
             transaction.update(missionRef, "progreso", nuevoProgreso)
         }
         null
-    }.addOnSuccessListener {
+    }.addOnSuccessListener { 
         if (seCompleto) sincronizarPuntosYLogros(uid)
-        onSuccess(updatedMission, seCompleto)
+        onResult?.invoke(mission.copy(progreso = nuevoProgreso.coerceAtMost(mission.meta), completada = seCompleto), seCompleto)
     }
 }
 
 /**
  * Actualiza el progreso de misiones basado en el tipo de residuo detectado.
- * Si la misión no existe (por ejemplo, para papel), la crea dinámicamente.
+ * Adaptado a los nuevos labels: plastico, vidrio, carton, lata, Organico, papel.
  */
-fun registrarResiduoDetectado(
-    uid: String,
-    label: String,
-    onMissionAdvanced: (MissionItem, Boolean) -> Unit = { _, _ -> }
-) {
+fun registrarResiduoDetectado(uid: String, label: String, onResult: ((MissionItem, Boolean) -> Unit)? = null) {
     val db = Firebase.firestore
     val misionesRef = db.collection("usuarios").document(uid).collection("misiones")
     
@@ -157,15 +148,20 @@ fun registrarResiduoDetectado(
     
     // Mapeo flexible de labels a misiones
     when {
-        cleanLabel.contains("plastic") || cleanLabel.contains("plastico") -> targetIds.addAll(listOf("m1", "m6"))
-        cleanLabel.contains("paper") || cleanLabel.contains("papel") || cleanLabel.contains("carton") || cleanLabel.contains("servilleta") -> {
+        cleanLabel == "plastico" -> targetIds.addAll(listOf("m1", "m6"))
+        cleanLabel == "papel" || cleanLabel == "carton" -> {
             targetIds.add("m7")
-            targetIds.add("m11") // Nueva misión de 100 papeles
+            targetIds.add("m11")
         }
-        cleanLabel.contains("glass") || cleanLabel.contains("vidrio") -> targetIds.add("m8")
-        cleanLabel.contains("battery") || cleanLabel.contains("pila") -> targetIds.add("m9")
+        cleanLabel == "vidrio" -> targetIds.add("m8")
+        cleanLabel == "lata" -> {
+            // Podríamos crear una misión para latas o usar una genérica
+            targetIds.add("m_custom_lata")
+        }
+        cleanLabel == "organico" -> {
+            targetIds.add("m_custom_organico")
+        }
         else -> {
-            // Si es un residuo nuevo (ej: metal), creamos un ID de misión dinámico
             if (cleanLabel.isNotEmpty() && cleanLabel != "background") {
                 targetIds.add("m_custom_$cleanLabel")
             }
@@ -179,28 +175,27 @@ fun registrarResiduoDetectado(
         misionesRef.document(id).get().addOnSuccessListener { doc ->
             if (doc.exists()) {
                 val mission = doc.toObject<MissionItem>()?.copy(id = doc.id)
-                if (mission != null) completarPasoMision(uid, mission, onMissionAdvanced)
+                if (mission != null) completarPasoMision(uid, mission, onResult)
             } else {
                 // Si la misión no existe para este usuario, la creamos
                 val oficial = misionesOficiales.find { it.id == id }
                 if (oficial != null) {
                     misionesRef.document(id).set(oficial).addOnSuccessListener {
-                        completarPasoMision(uid, oficial, onMissionAdvanced)
+                        completarPasoMision(uid, oficial, onResult)
                     }
                 } else if (id.startsWith("m_custom_")) {
-                    // Misión dinámica para nuevos tipos de residuos con el diseño estándar
                     val labelCapitalized = cleanLabel.replaceFirstChar { it.uppercase() }
                     val nuevaMision = MissionItem(
                         id = id,
                         titulo = "Reto $labelCapitalized",
-                        descripcion = "Has descubierto un nuevo residuo: $cleanLabel. ¡Recicla 5 unidades!",
+                        descripcion = "Has detectado un residuo de tipo $cleanLabel. ¡Recíclalo para ganar puntos!",
                         progreso = 0,
                         meta = 5,
                         recompensa = 50,
                         completada = false
                     )
                     misionesRef.document(id).set(nuevaMision).addOnSuccessListener {
-                        completarPasoMision(uid, nuevaMision, onMissionAdvanced)
+                        completarPasoMision(uid, nuevaMision, onResult)
                     }
                 }
             }

@@ -38,6 +38,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -50,6 +51,51 @@ import com.example.cyclapp.model.MissionItem
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.delay
 import java.io.File
+
+data class ContainerInfo(
+    val color: Color,
+    val textColor: Color,
+    val name: String,
+    val description: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector
+)
+
+/**
+ * Mapeo de los nuevos labels (plastico, vidrio, carton, lata, Organico, papel)
+ * a sus respectivos contenedores según la normativa de reciclaje.
+ */
+fun getContainerInfo(label: String): ContainerInfo {
+    val l = label.lowercase().trim()
+    return when {
+        l == "plastico" || l == "vidrio" || l == "carton" || l == "papel" || l == "lata" -> {
+            ContainerInfo(
+                color = Color.White,
+                textColor = Color.Black,
+                name = "CONTENEDOR BLANCO",
+                description = "Residuos aprovechables (limpios y secos): Plástico, Vidrio, Papel, Cartón y Metales.",
+                icon = Icons.Default.Recycling
+            )
+        }
+        l == "organico" -> {
+            ContainerInfo(
+                color = Color(0xFF4CAF50),
+                textColor = Color.White,
+                name = "CONTENEDOR VERDE",
+                description = "Residuos orgánicos aprovechables (restos de comida, desechos agrícolas).",
+                icon = Icons.Default.Eco
+            )
+        }
+        else -> {
+            ContainerInfo(
+                color = Color.Black,
+                textColor = Color.White,
+                name = "CONTENEDOR NEGRO",
+                description = "Residuos no aprovechables (papel higiénico, servilletas, papeles sucios).",
+                icon = Icons.Default.Delete
+            )
+        }
+    }
+}
 
 @Composable
 fun CameraScreen(
@@ -68,13 +114,14 @@ fun CameraScreen(
     val imageCapture = remember { ImageCapture.Builder().build() }
     
     var capturedImagePath by remember { mutableStateOf<String?>(null) }
-    var classificationResult by remember { mutableStateOf<String?>(null) }
+    var classificationLabel by remember { mutableStateOf<String?>(null) }
+    var classificationScore by remember { mutableStateOf<Float?>(null) }
     var isAnalyzing by remember { mutableStateOf(false) }
 
     // Estado para la notificación de misión
     var missionNotification by remember { mutableStateOf<Pair<MissionItem, Boolean>?>(null) }
 
-    // Ocultar notificación después de 3 segundos
+    // Ocultar notificación después de 3.5 segundos
     LaunchedEffect(missionNotification) {
         if (missionNotification != null) {
             delay(3500)
@@ -132,11 +179,13 @@ fun CameraScreen(
                 if (capturedImagePath != null) {
                     CapturedImagePreview(
                         imagePath = capturedImagePath!!,
-                        result = classificationResult,
+                        label = classificationLabel,
+                        score = classificationScore,
                         isAnalyzing = isAnalyzing,
                         onRetake = {
                             capturedImagePath = null
-                            classificationResult = null
+                            classificationLabel = null
+                            classificationScore = null
                         },
                         onAnalyze = {
                             val bitmap = BitmapFactory.decodeFile(capturedImagePath)
@@ -145,19 +194,19 @@ fun CameraScreen(
                                 val results = classifier.classify(bitmap)
                                 if (results.isNotEmpty()) {
                                     val topResult = results[0]
-                                    classificationResult = "${topResult.label} (${(topResult.score * 100).toInt()}%)"
+                                    classificationLabel = topResult.label
+                                    classificationScore = topResult.score
                                     
                                     // Actualizar misiones si la confianza es alta
                                     if (topResult.score > 0.7f) {
                                         val uid = auth.currentUser?.uid
                                         if (uid != null) {
-                                            registrarResiduoDetectado(uid, topResult.label) { mission, completed ->
-                                                missionNotification = mission to completed
-                                            }
+                                            registrarResiduoDetectado(uid, topResult.label)
+                                            Toast.makeText(context, "¡Residuo detectado: ${topResult.label}!", Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                 } else {
-                                    classificationResult = "No se pudo identificar"
+                                    classificationLabel = "No se pudo identificar"
                                 }
                                 isAnalyzing = false
                             }
@@ -425,7 +474,8 @@ fun CameraScreen(
 @Composable
 fun CapturedImagePreview(
     imagePath: String,
-    result: String?,
+    label: String?,
+    score: Float?,
     isAnalyzing: Boolean,
     onRetake: () -> Unit,
     onAnalyze: () -> Unit
@@ -448,7 +498,7 @@ fun CapturedImagePreview(
             color = Color(0xFF333333)
         )
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         if (bitmap != null) {
             Box(contentAlignment = Alignment.Center) {
@@ -457,12 +507,12 @@ fun CapturedImagePreview(
                     contentDescription = "Foto del residuo",
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(380.dp)
+                        .height(300.dp)
                         .clip(RoundedCornerShape(24.dp)),
                     contentScale = ContentScale.Crop
                 )
                 
-                if (result != null) {
+                if (label != null) {
                     Surface(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -471,20 +521,80 @@ fun CapturedImagePreview(
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Text(
-                            text = result,
+                            text = "${label.replace("_", " ").uppercase()} (${(score?.times(100))?.toInt()}%)",
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp
+                            fontSize = 16.sp
                         )
                     }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        if (result == null) {
+        // Tarjeta de información del contenedor basada en el nuevo modelo
+        AnimatedVisibility(
+            visible = label != null && label != "No se pudo identificar",
+            enter = fadeIn() + expandVertically()
+        ) {
+            label?.let {
+                val info = getContainerInfo(it)
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = info.color.copy(alpha = 0.9f)),
+                    border = if (info.color == Color.White) BorderStroke(2.dp, Color.LightGray) else null,
+                    elevation = CardDefaults.cardElevation(4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(50.dp)
+                                .background(info.textColor.copy(alpha = 0.2f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = info.icon,
+                                contentDescription = null,
+                                tint = info.textColor,
+                                modifier = Modifier.size(30.dp)
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.width(16.dp))
+                        
+                        Column {
+                            Text(
+                                text = "¡Tíralo aquí!",
+                                color = info.textColor.copy(alpha = 0.7f),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = info.name,
+                                color = info.textColor,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Text(
+                                text = info.description,
+                                color = info.textColor.copy(alpha = 0.9f),
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (label == null) {
             Button(
                 onClick = onAnalyze,
                 modifier = Modifier.fillMaxWidth(),
@@ -513,11 +623,12 @@ fun CapturedImagePreview(
             ) {
                 Row(
                     modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
                 ) {
                     Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF4CAF50))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("¡Residuo registrado en tus misiones!", fontSize = 14.sp, color = Color(0xFF2E7D32))
+                    Text("¡Registro exitoso!", fontSize = 14.sp, color = Color(0xFF2E7D32), fontWeight = FontWeight.Bold)
                 }
             }
         }
